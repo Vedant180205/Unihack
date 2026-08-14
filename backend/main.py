@@ -1,7 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Dict
-import pandas as pd
+import polars as pl
 import duckdb
 import io
 
@@ -18,8 +18,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize DuckDB connection (in-memory for now)
-db = duckdb.connect(':memory:')
+# Initialize DuckDB connection (persistent)
+db = duckdb.connect('unihack.duckdb')
 
 @app.on_event("startup")
 async def startup_event():
@@ -40,9 +40,9 @@ async def process_batch(file: UploadFile = File(...)):
     content = await file.read()
     # Basic reading for now
     if file.filename.endswith('.csv'):
-        df = pd.read_csv(io.BytesIO(content))
+        df = pl.read_csv(content)
     else:
-        df = pd.read_excel(io.BytesIO(content))
+        df = pl.read_excel(content)
     
     # TODO: Pass dataframe through pipeline (Splink -> Outlines -> Confidence Check)
     

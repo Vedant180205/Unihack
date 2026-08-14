@@ -1,8 +1,8 @@
 import duckdb
-import pandas as pd
+import polars as pl
 import os
 
-DB_PATH = ":memory:"  # In memory for now, change to a file for persistence
+DB_PATH = "unihack.duckdb"  # Persistent database file
 
 def init_db():
     conn = duckdb.connect(DB_PATH)
@@ -15,10 +15,10 @@ def init_db():
         conn.execute(f"CREATE TABLE IF NOT EXISTS sample_input AS SELECT * FROM read_csv_auto('{input_sample}', normalize_names=True)")
         print(f"Loaded {input_sample} into sample_input table.")
     
-    # Placeholder for Excel master files (using Pandas to read Excel into DuckDB)
+    # Placeholder for Excel master files (using Polars to read Excel into DuckDB)
     brand_file = os.path.join(docs_dir, "UniCat_Manufacturer_and_Brand_List.xlsx")
     if os.path.exists(brand_file):
-        df_brands = pd.read_excel(brand_file)
+        df_brands = pl.read_excel(brand_file)
         conn.execute("CREATE TABLE IF NOT EXISTS master_brands AS SELECT * FROM df_brands")
         print(f"Loaded {brand_file} into master_brands table.")
     else:
