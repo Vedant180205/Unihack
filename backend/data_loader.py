@@ -14,15 +14,6 @@ def init_db():
     if os.path.exists(input_sample):
         conn.execute(f"CREATE TABLE IF NOT EXISTS sample_input AS SELECT * FROM read_csv_auto('{input_sample}', normalize_names=True)")
         print(f"Loaded {input_sample} into sample_input table.")
-    
-    # Placeholder for Excel master files (using Polars to read Excel into DuckDB)
-    brand_file = os.path.join(docs_dir, "UniCat_Manufacturer_and_Brand_List.xlsx")
-    if os.path.exists(brand_file):
-        df_brands = pl.read_excel(brand_file)
-        conn.execute("CREATE TABLE IF NOT EXISTS master_brands AS SELECT * FROM df_brands")
-        print(f"Loaded {brand_file} into master_brands table.")
-    else:
-        print(f"Master file not found: {brand_file}")
         
     return conn
 
