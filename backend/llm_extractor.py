@@ -13,17 +13,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # We grab our Graph rules to enforce constraints
-from rules import get_category_schema
-
-# ---------------------------------------------------------
-# LLM Constraint Schema
-# ---------------------------------------------------------
-class DishwasherAttributes(BaseModel):
-    mounting_type: Optional[str] = Field(description="Must be exactly: Leg Mounting, Built-In, or Under-Counter")
-    material: Optional[str] = Field(description="Must be exactly: Stainless Steel, Plastic, or Black Stainless")
-    wash_cycles: Optional[str] = Field(description="Must be exactly: 3-Wash Cycle, 4-Wash Cycle, 5-Wash Cycle, or 6-Wash Cycle")
-    voltage: Optional[str] = Field(description="Must be exactly: 120 V or 240 V")
-    amperage: Optional[str] = Field(description="Must be exactly: 15 A or 20 A")
+from rules import get_category_schema, build_pydantic_model_for_category
 
 # ---------------------------------------------------------
 # The Hybrid RAG Engine
@@ -76,7 +66,7 @@ async def crawl_text_from_url(url: str) -> str:
         print(f"[!] Crawl4AI scraping failed for {url}: {e}")
         return ""
 
-def extract_attributes_with_gemini(scraped_text: str, category_schema: dict):
+def extract_attributes_with_gemini(scraped_text: str, category_schema: dict, dynamic_model_class):
     """
     Feeds the scraped text into Gemini Flash Lite and guarantees strict JSON output.
     """
@@ -111,7 +101,7 @@ def extract_attributes_with_gemini(scraped_text: str, category_schema: dict):
     # Enforce Pydantic Output using the new SDK
     config = types.GenerateContentConfig(
         response_mime_type="application/json",
-        response_schema=DishwasherAttributes,
+        response_schema=dynamic_model_class,
     )
 
     try:
@@ -134,7 +124,7 @@ def extract_attributes_with_groq_fallback(mfg_part_num: str, brand: str, categor
     
     if not os.environ.get("GROQ_API_KEY"):
         print("[!] GROQ_API_KEY missing from environment variables.")
-        return None
+        return None, None
         
     client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
     model = "llama-3.3-70b-versatile" # Groq's top open model that supports tools
@@ -191,17 +181,18 @@ async def process_item_ai_pipeline(mfg_part_num: str, brand: str, classpath: str
     print(f"\n--- Processing {brand} {mfg_part_num} ---")
     
     schema_constraints = get_category_schema(classpath)
+    dynamic_model = build_pydantic_model_for_category(classpath)
     
     # 1. Try Free RAG Workflow with Crawl4AI
     source_url = search_manufacturer_specs(mfg_part_num, brand)
     scraped_text = await crawl_text_from_url(source_url) if source_url else ""
     
     extracted_json = None
-    if scraped_text:
-        extracted_json = extract_attributes_with_gemini(scraped_text, schema_constraints)
+    if scraped_text and dynamic_model:
+        extracted_json = extract_attributes_with_gemini(scraped_text, schema_constraints, dynamic_model)
         
     # 2. Smart Fallback Logic: If Crawl4AI failed or returned empty/null data
-    if not extracted_json or '"mounting_type": null' in extracted_json:
+    if not extracted_json or "null" in extracted_json:
         print("[!] Free RAG returned empty/null data. Switching to Groq Agentic Search Fallback!")
         extracted_json, fallback_url = extract_attributes_with_groq_fallback(mfg_part_num, brand, schema_constraints)
         if fallback_url:

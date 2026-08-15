@@ -1,4 +1,6 @@
 import re
+from pydantic import create_model, Field
+from typing import Optional, Literal
 
 def normalize_uom(value: str) -> str:
     """
@@ -57,38 +59,57 @@ def normalize_fraction(decimal_val: float) -> str:
 # ---------------------------------------------------------
 # Taxonomy Knowledge Graph (Step 2.2)
 # ---------------------------------------------------------
+import duckdb
+import json
+import os
 
-# This acts as our "Embedded Knowledge Graph" for now.
-# In a full run, this would be a NetworkX graph parsed from Unicat_Lov_v1_0.xlsx
-
-KNOWLEDGE_GRAPH = {
-    "Appliances & Consumer Electronics > Kitchen Appliances > Built-In Dishwashers": {
-        "Mounting Type": ["Leg Mounting", "Built-In", "Under-Counter"],
-        "Material": ["Stainless Steel", "Plastic", "Black Stainless"],
-        "Wash Cycles": ["3-Wash Cycle", "4-Wash Cycle", "5-Wash Cycle", "6-Wash Cycle"],
-        "Voltage": ["120 V", "240 V"],
-        "Amperage": ["15 A", "20 A"]
-    },
-    "Plumbing > Faucets > Kitchen Faucets": {
-        "Mounting Type": ["Deck Mount", "Wall Mount"],
-        "Material": ["Brass", "Stainless Steel", "Chrome", "Matte Black"],
-        "Handle Type": ["Single Handle", "Double Handle", "Touchless"]
-    }
-}
+DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "unihack.duckdb")
 
 def get_category_schema(classpath: str) -> dict:
     """
-    Takes a category classpath and queries the Knowledge Graph 
-    to return the EXACT allowed attributes and their valid LOVs.
+    Queries the DuckDB taxonomies table for the allowed attributes
+    of a given category. Returns {} if not found.
     """
-    # Graph Traversal (simulated by dict lookup)
-    return KNOWLEDGE_GRAPH.get(classpath, {})
+    try:
+        conn = duckdb.connect(DB_PATH)
+        result = conn.execute(
+            "SELECT attributes FROM taxonomies WHERE classpath = ?", 
+            [classpath]
+        ).fetchone()
+        conn.close()
+        if result and result[0]:
+            return json.loads(result[0])
+    except Exception as e:
+        print(f"[!] Taxonomy lookup failed: {e}")
+    return {}
 
 def build_pydantic_model_for_category(classpath: str):
     """
-    Dynamically constructs a Pydantic schema based on the Knowledge Graph.
-    This guarantees the LLM physically cannot hallucinate invalid values.
+    Dynamically constructs a Pydantic model class from the DuckDB taxonomy.
+    The LLM physically cannot hallucinate values outside the allowed LOVs.
+    Returns the model CLASS (not an instance).
     """
-    schema_constraints = get_category_schema(classpath)
-    # We will use this in the LLM step to feed to the `instructor` library.
-    return schema_constraints
+    schema = get_category_schema(classpath)
+    if not schema:
+        return None  # Unknown category; let LLM run free-form
+    
+    field_definitions = {}
+    for attr_name, allowed_values in schema.items():
+        # Sanitize the attribute name to be a valid Python identifier
+        field_key = re.sub(r'[^a-zA-Z0-9_]', '_', attr_name).lower()
+        
+        # Build a Literal type from the allowed list of values
+        if allowed_values:
+            literal_type = Literal[tuple(str(v) for v in allowed_values)]
+            field_definitions[field_key] = (
+                Optional[literal_type],
+                Field(None, description=f"Must be one of: {allowed_values}")
+            )
+        else:
+            field_definitions[field_key] = (
+                Optional[str],
+                Field(None, description=f"Extract value for {attr_name}")
+            )
+    
+    DynamicModel = create_model('DynamicTaxonomyModel', **field_definitions)
+    return DynamicModel
