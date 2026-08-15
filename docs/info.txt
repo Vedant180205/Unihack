@@ -1,0 +1,102 @@
+#unilog
+#unilogcorp
+#unihack
+
+UniHack
+Virtual
+Team Size: 1-4
+Free
+Last Date to Register: Wed 12 Aug 2026
+
+Solution Guide is now live on your dashboard! Head to the Resources section to access it.
+
+About UniHack
+UniHack is an AI innovation hackathon focused on building prototype solutions for Unilog’s content and commerce challenges. The hackathon invites student developers to leverage AI, ML, and emerging technologies to create impactful MVPs and POCs. Participants will solve real-world business problems, showcase their innovation, and explore opportunities to collaborate with Unilog.
+
+Who Can Participate
+College students currently pursuing their undergraduate engineering programs from any recognized university or college across India are eligible to participate.
+
+Challenge Statement
+AI-Powered Product Intelligence for Industrial Commerce
+Industrial companies manage large amounts of product information across multiple sources such as websites, catalogs, and technical documents. Converting this scattered information into accurate and structured product data is a challenging and time-consuming process.
+
+The Objective: Participants are invited to build AI-powered solutions that can transform limited product information into rich, reliable, and commerce-ready product intelligence—focusing on data enrichment, validation, and explainable outputs.
+
+Expected Outcomes
+
+Structured Data Generation – Generate structured product information from limited inputs
+
+Accuracy & Consistency – Improve accuracy and consistency of product data
+
+AI Validation & Enrichment – Validate and enrich product information using AI
+
+Scalable Catalog Engine – Build scalable solutions for large product catalogs
+
+What's In It For You?
+₹5,00,000 Prize Pool
+
+🏆 Winner – ₹2,00,000
+
+🥈 1st Runner-up – ₹1,50,000
+
+🥉 2nd Runner-up – ₹1,00,000
+
+⭐ Special Award – ₹25,000
+
+⭐ Special Award – ₹25,000
+
+Top performers may be considered for internships, PPOs, and full-time roles at Unilog.
+Build AI-powered solutions for real business use cases in content and commerce.
+Showcase your skills and gain visibility among Unilog's technology leaders.
+Apply AI, ML, and emerging technologies to build impactful prototypes.
+
+Note: Ownership of the IP rights for winning solutions will be transferred to the program organizers upon confirmation of the award.
+
+Recommended Tech Stack
+AI/ML, Generative AI, Python, LLMs, NLP, Data Processing, Cloud Technologies, APIs, Automation Frameworks, Web Technologies, Prompt Engineering, Machine Learning Frameworks, Java, Open Source Technologies.
+
+Hackathon Journey
+
+29 Jul - 12 Aug, 2026 – Registrations Closed (Registrations for UniHack have officially closed.)
+
+29 Jul - 23 Aug, 2026 – Prototype Submission (Develop and submit your AI-powered MVP or POC. Registered participants can submit through the hackathon portal.)
+
+24 Aug - 1 Sep, 2026 – Evaluations (Based on innovation, technical implementation, business relevance, and overall impact.)
+
+4 Sep, 2026 – Finale (Winners announced, prizes awarded.)
+
+FAQs
+
+Who can participate? – Engineering students enrolled in any recognized university or college across India.
+
+Is there a registration fee? – No, it is completely free.
+
+Can I participate individually or as a team? – Both allowed; teams of up to 4 members are encouraged.
+
+What kind of solutions are expected? – AI-powered MVPs or POCs addressing the business challenge.
+
+What technologies can I use? – AI/ML, Generative AI, LLMs, Python, NLP, Cloud, APIs, etc.
+
+How will submissions be evaluated? – Innovation, technical implementation, business relevance, scalability, and impact.
+
+What can participants win? – Share of ₹5 Lakhs prize pool plus internship/PPO/full-time opportunities.
+
+How do I submit my prototype? – Through the hackathon portal before the deadline.
+
+When will winners be announced? – On 4th September 2026.
+
+Project Submission
+[ Module Closing in : 10:00:48:50 ]
+Wed, Jul 29, 2026 10:31 AM (IST) -
+
+Sun, Aug 23, 2026 11:59 PM (IST)
+
+It is mandatory to use the given presentation template for protoype submission : Download Now
+
+During prototype submission, provide your working prototype with:
+
+Solution Overview: Explain how your prototype solves the problem.
+Prototype Link: A live MVP link demonstrating core functionality.
+Project Deck: A concise deck detailing your solution, architecture, and impact.
+GitHub Repository: Public link to the source code.
+Demo Video: A short video showcasing your solution and its functionality.
