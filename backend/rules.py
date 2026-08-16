@@ -56,6 +56,31 @@ def normalize_fraction(decimal_val: float) -> str:
     
     return str(decimal_val)
 
+import jellyfish
+
+def calculate_mathematical_confidence(raw_brand: str, extracted_json: dict) -> float:
+    """
+    Calculates a deterministic 0-100 score based on Jaro-Winkler string distance
+    and weighted attribute completeness.
+    """
+    # 1. Fuzzy Brand Match (Jaro-Winkler)
+    canonical_brand = extracted_json.get("canonical_brand", "")
+    jw_score = jellyfish.jaro_winkler_similarity(raw_brand.lower(), canonical_brand.lower()) if canonical_brand else 0.0
+    
+    # 2. Attribute Completeness
+    attribute_matrix = extracted_json.get("attribute_matrix", {})
+    if not attribute_matrix:
+        return round((jw_score * 0.4) * 100, 2)
+        
+    total_attrs = len(attribute_matrix)
+    found_attrs = sum(1 for v in attribute_matrix.values() if v is not None and v != "")
+    completeness_score = found_attrs / total_attrs if total_attrs > 0 else 0.0
+    
+    # We heavily weight completeness (60%) and brand matching (40%)
+    final_score = (jw_score * 0.4) + (completeness_score * 0.6)
+    
+    return round(final_score * 100, 2)
+
 # ---------------------------------------------------------
 # Taxonomy Knowledge Graph (Step 2.2)
 # ---------------------------------------------------------
@@ -111,5 +136,18 @@ def build_pydantic_model_for_category(classpath: str):
                 Field(None, description=f"Extract value for {attr_name}")
             )
     
-    DynamicModel = create_model('DynamicTaxonomyModel', **field_definitions)
-    return DynamicModel
+    DynamicTaxonomyModel = create_model('DynamicTaxonomyModel', **field_definitions)
+    
+    # Now wrap it in the Master Output Schema (The 5 Formats)
+    MasterOutputModel = create_model(
+        'ProductEnrichmentOutput',
+        invoice_description=(str, Field(..., description="<= 40 chars, ALL CAPS. Crucial features only. e.g. DISHWASHER BUILT-IN SST 120V 15A")),
+        mobile_description=(str, Field(..., description="60-80 chars. Optimized for mobile app viewing.")),
+        short_title=(str, Field(..., description="Formula: [Brand] + [Series] + [MPN] + [Item Type] + [Key Attributes]")),
+        long_description=(str, Field(..., description="Comprehensive technical layout covering all major specs.")),
+        confidence_score=(float, Field(..., description="0 to 100 score indicating certainty of the extracted data and brand match.")),
+        canonical_brand=(str, Field(..., description="The cleaned, canonical brand name (strip LLC, Inc, etc).")),
+        attribute_matrix=(DynamicTaxonomyModel, Field(..., description="The highly constrained JSON matrix of key specs."))
+    )
+    
+    return MasterOutputModel

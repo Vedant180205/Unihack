@@ -115,7 +115,7 @@ def extract_attributes_with_gemini(scraped_text: str, category_schema: dict, dyn
         print(f"[!] Extraction failed: {e}")
         return None
 
-def extract_attributes_with_groq_fallback(mfg_part_num: str, brand: str, category_schema: dict):
+def extract_attributes_with_groq_fallback(mfg_part_num: str, brand: str, dynamic_model_class):
     """
     The Smart Fallback: Uses Groq's Built-In Tools to Agentically Search 
     and Visit Websites when the local headless browser gets blocked.
@@ -129,19 +129,20 @@ def extract_attributes_with_groq_fallback(mfg_part_num: str, brand: str, categor
     client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
     model = "llama-3.3-70b-versatile" # Groq's top open model that supports tools
     
-    schema_json = json.dumps(category_schema, indent=2)
+    # We now pass the entire MasterOutputModel schema, which includes the 5 descriptions and the dynamic attribute matrix!
+    schema_json = json.dumps(dynamic_model_class.model_json_schema(), indent=2)
     
     prompt = f"""
     You are a strict product data extraction AI.
     Your task is to search the web and find the official manufacturer specifications for: {brand} {mfg_part_num}.
     
     Use your built-in web search and website visiting tools to find the product page or spec sheet.
-    Once you find the data, extract the attributes defined in the JSON schema below.
+    Once you find the data, extract all attributes and generate the required descriptions defined in the JSON schema below.
     
-    CRITICAL: You MUST return a valid JSON object. 
+    CRITICAL: You MUST return a valid JSON object strictly adhering to the schema. 
     If an attribute is not explicitly stated on the official sites, you MUST set its value to null. Do not guess.
     
-    Category Constraints:
+    Master Schema:
     {schema_json}
     """
 
@@ -194,9 +195,30 @@ async def process_item_ai_pipeline(mfg_part_num: str, brand: str, classpath: str
     # 2. Smart Fallback Logic: If Crawl4AI failed or returned empty/null data
     if not extracted_json or "null" in extracted_json:
         print("[!] Free RAG returned empty/null data. Switching to Groq Agentic Search Fallback!")
-        extracted_json, fallback_url = extract_attributes_with_groq_fallback(mfg_part_num, brand, schema_constraints)
+        extracted_json, fallback_url = extract_attributes_with_groq_fallback(mfg_part_num, brand, dynamic_model)
         if fallback_url:
             source_url = fallback_url
+        
+        # Apply deterministic post-processing rules here to the JSON!
+        try:
+            if extracted_json:
+                import re
+                # Clean up Groq's habit of injecting line citations like // 【2†L4-L6】
+                clean_json = re.sub(r'//\s*【.*?】', '', extracted_json)
+                parsed_json = json.loads(clean_json)
+                
+                # We could run parsed_json through normalize_uom and normalize_fraction here
+                # (Demonstrating deterministic rule enforcement)
+                from rules import normalize_uom, normalize_fraction, calculate_mathematical_confidence
+                
+                # Overwrite the AI's "vibe" score with strict Jaro-Winkler + Completeness Math
+                # Note: We simulate the 'raw_brand' input here using the given brand argument
+                true_score = calculate_mathematical_confidence(brand, parsed_json)
+                parsed_json['confidence_score'] = true_score
+                
+                extracted_json = json.dumps(parsed_json, indent=2)
+        except Exception as e:
+            print(f"[!] Deterministic post-processing failed: {e}")
         
     return {
         "mfr_url": source_url or "Found via Grounding",

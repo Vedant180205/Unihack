@@ -54,9 +54,66 @@ This is the ultimate proof of **"Scalability"** and **"Innovation in Approach"**
 
 ---
 
-### Phase 3: Assembly & Human-In-The-Loop Dashboard
+### Phase 2.6: Deterministic Pre-Processing & 5-Format Synthesis (NEW)
 
-**Goal**: Build a stunning, interactive Web UI for operators to audit and approve the AI-extracted product data, directly interfacing with our backend.
+**Goal**: Based on `chatwai.txt` and `aichat2.txt`, the pipeline must output **5 specific formats** and use **deterministic rule normalizers**. We will implement these missing pieces before building the UI.
+
+#### 2.6.1 Deterministic Pre-Processing
+1. **Fraction Converter**: We will build a Python function in `rules.py` that converts floating-point measurements into trade fractions (e.g., `50.25` → `50-1/4 in`).
+2. **UOM Normalizer**: We will add a regex normalizer mapping noisy units (e.g., "IN.", "inches", "inch") to their standard abbreviations ("in").
+3. **Brand Canonicalization**: We will enhance `entity_linker.py` to map messy supplier names to clean brands (e.g., "Jam Industrial" → "3M").
+
+#### 2.6.2 The Multi-Format Synthesis Engine
+We will update our Pydantic schema in `llm_extractor.py` to force the AI to not just output the attribute matrix, but also the 4 required descriptions:
+1. **Invoice Description**: `<= 40 chars, ALL CAPS` (e.g., "DISHWASHER BUILT-IN SST 120V 15A").
+2. **Mobile Description**: `60-80 chars`.
+3. **Short Title**: `[Brand] + [Series] + [MPN] + [Item Type] + [Key Attributes]`.
+4. **Long Description**: `Comprehensive technical layout`.
+
+#### 2.6.3 Confidence Scoring
+We will generate a **Confidence Score (0-100%)** based on how many attributes the AI successfully found vs how many were set to `null`. This score will dictate whether the item is "Auto-Approved" or sent to our HITL Dashboard.
+
+---
+
+### Phase 2.7: Deterministic Confidence Scoring Math (NEW)
+
+**Goal**: Replace the LLM's self-reflected confidence score with a rigorous, mathematical composite score to guarantee accuracy for the judges.
+
+#### 2.7.1 Fuzzy Brand Matching (Jaro-Winkler)
+We will install the `jellyfish` library to calculate the Jaro-Winkler distance between the original raw supplier brand and the canonical brand extracted by the AI. This mathematically proves if the canonicalization is safe.
+
+#### 2.7.2 Weighted Attribute Completeness
+We will write a deterministic Python function that traverses the JSON extracted by the AI. It will calculate:
+`Score = (Number of Attributes Found / Total Attributes Requested) * 100`
+
+#### 2.7.3 The Composite Score
+We will combine these scores into a `Final_Score`. We will then forcibly overwrite the AI's `confidence_score` inside the JSON with this true mathematical value during the post-processing step in `llm_extractor.py`.
+
+---
+
+### Phase 3: Assembly & Human-In-The-Loop Dashboard (Handoff to Vedant)
+
+**Goal**: Build a stunning, interactive Web UI for the Content Operations team to audit and approve the AI-extracted product data. This dashboard is the "Human-in-the-Loop" (HITL) system that will win us the innovation category.
+
+#### 3.1 Backend FastAPI Setup (Data API)
+We need a `main.py` FastAPI server that serves our extraction logic to the frontend:
+1. **`POST /api/extract`**: Takes a `mfg_part_num` and `brand`. Runs the `process_item_ai_pipeline`. Returns the 5-Format JSON and Confidence Score.
+2. **`GET /api/queue`**: Pulls the first 10 un-processed rows from `Sample-1000_Items.xlsx` (or our DuckDB `sample_input` table) and returns them to the frontend to populate a "To-Do" list.
+3. **`POST /api/approve`**: Takes the human-audited JSON from the frontend and writes it to the final `Delivery Format.csv` with the 252-column mapping.
+
+#### 3.2 Frontend Dashboard Architecture
+The frontend should be a beautiful, modern, glass-morphism style React/Next.js app (or Vanilla JS if preferred) featuring:
+1. **The Ingestion Queue (Left Sidebar)**:
+   - Displays a list of SKUs waiting to be processed.
+   - Shows live status: "Pending", "Extracting...", "Needs Review", "Approved".
+2. **The Extraction View (Main Panel)**:
+   - Displays the 5 Formats extracted by the AI (`Invoice`, `Mobile`, `Short Title`, `Long Desc`, `Attribute Matrix`).
+   - If `confidence_score >= 90`, the background of this panel should glow green (Auto-Approved).
+   - If `confidence_score < 90`, the panel glows yellow/red and forces the user to click an "Approve" button.
+3. **Editable Fields (The Human-in-the-Loop)**:
+   - If the AI missed an attribute (left it `null`), highlight the input box in red so the human analyst knows they need to type it in manually before approving.
+4. **Final Export Button**:
+   - A global button that downloads the final 252-column CSV mapping of all approved products.
 
 #### 3.1 The Tech Stack
 To minimize overhead during the hackathon and keep everything unified, we will extend our existing backend into a Full-Stack application:
