@@ -73,7 +73,13 @@ def calculate_mathematical_confidence(raw_brand: str, extracted_json: dict) -> f
         return round((jw_score * 0.4) * 100, 2)
         
     total_attrs = len(attribute_matrix)
-    found_attrs = sum(1 for v in attribute_matrix.values() if v is not None and v != "")
+    
+    # We now check if the sub-model's 'value' field is populated
+    found_attrs = 0
+    for v in attribute_matrix.values():
+        if v and isinstance(v, dict) and v.get("value"):
+            found_attrs += 1
+            
     completeness_score = found_attrs / total_attrs if total_attrs > 0 else 0.0
     
     # We heavily weight completeness (60%) and brand matching (40%)
@@ -108,6 +114,22 @@ def get_category_schema(classpath: str) -> dict:
         print(f"[!] Taxonomy lookup failed: {e}")
     return {}
 
+def create_attribute_model(attr_name: str, allowed_values: list = None):
+    """
+    Creates a dynamic sub-model for a specific attribute to enforce both 
+    the allowed LOVs (via Literal) and a source_url field for provenance.
+    """
+    fields = {}
+    if allowed_values:
+        literal_type = Literal[tuple(str(v) for v in allowed_values)]
+        fields['value'] = (Optional[literal_type], Field(None, description=f"Must be one of: {allowed_values}"))
+    else:
+        fields['value'] = (Optional[str], Field(None, description=f"Extract value for {attr_name}. Set null if not found."))
+        
+    fields['source_url'] = (Optional[str], Field(None, description="The precise URL where this specific value was found on the official site."))
+    
+    return create_model(f'{attr_name.capitalize()}Attribute', **fields)
+
 def build_pydantic_model_for_category(classpath: str):
     """
     Dynamically constructs a Pydantic model class from the DuckDB taxonomy.
@@ -123,18 +145,9 @@ def build_pydantic_model_for_category(classpath: str):
         # Sanitize the attribute name to be a valid Python identifier
         field_key = re.sub(r'[^a-zA-Z0-9_]', '_', attr_name).lower()
         
-        # Build a Literal type from the allowed list of values
-        if allowed_values:
-            literal_type = Literal[tuple(str(v) for v in allowed_values)]
-            field_definitions[field_key] = (
-                Optional[literal_type],
-                Field(None, description=f"Must be one of: {allowed_values}")
-            )
-        else:
-            field_definitions[field_key] = (
-                Optional[str],
-                Field(None, description=f"Extract value for {attr_name}")
-            )
+        # Build the sub-model combining LOV constraints and the source URL
+        attr_model = create_attribute_model(field_key, allowed_values)
+        field_definitions[field_key] = (Optional[attr_model], Field(None))
     
     DynamicTaxonomyModel = create_model('DynamicTaxonomyModel', **field_definitions)
     
