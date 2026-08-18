@@ -1,0 +1,172 @@
+One question they gave these resources but not any other like xlsx mentioned in their solution guide so r we supposed to make up one?
+
+No, you do not need to invent or fabricate massive external datasets.
+
+The two files provided (Unihack_ Sample Dataset - Input.csv with 1,000 rows and Unihack_ Expected Output - Delivery Format.csv with the 252-column schema) give you the exact input requirements and the ground-truth target schema.  
+TXT
+
+How to Handle the Missing Reference Files
+Build Deterministic Internal Lookups in Python:
+
+UOM & Fractions: You do not need an external spreadsheet for Decimal_Fraction.xlsx. A simple Python dictionary or function can handle imperial fraction normalization (e.g., converting 0.5 → 1/2 and 50.25 in → 50-1/4 in).  
+TXT
++ 1
+
+Unit Standards: Hardcode standard engineering abbreviations (e.g., "inch", "in.", "inches" → "in", enforcing standard spacing like 24 in).  
+TXT
+
+Extract Rules from the Solution Guide Context:
+The guide provides explicit formula definitions and sample outputs to train your LLM/pipeline:  
+TXT
+
+Invoice Description: ≤40 chars, ALL CAPS (e.g., DISHWASHER LEG 5 SST 120V 15A 50-1/4IN).  
+TXT
+
+Mobile Description: 60–80 chars (e.g., Rheem Manufacturing FRIGIDAIRE, Dishwasher, Professional Series, PDSH4816AF).  
+TXT
+
+Short Title: [Brand] + [Series] + [MPN] + [Item Type] + [Key Attributes].  
+TXT
+
+Long Description: Comprehensive technical layout.  
+TXT
+
+Attribute Matrix: Dynamically populates the 50 key-value attribute columns (ATTRIBUTE_LABEL 1..50, ATTRIBUTE_VALUE 1..50, ATTRIBUTE_UOM 1..50).
+
+Entity Resolution & Sourcing via LLM / Web Search:
+
+For brand normalization, extract the canonical manufacturer and clean brand names (e.g., Freud Inc → DIABLO®, Jam Industrial Supply LLC → 3M®) using targeted LLM extraction.
+
+If a product requires technical specifications not in the raw string (e.g., electrical specs, wash cycles, sound level), prompt your LLM or retrieval layer to extract them based on the Mfg_Part_Num and item category.  
+TXT
+
+Focus on Vertical Depth Over Breadth:
+As highlighted in the guide, depth beats breadth. Demonstrating an end-to-end extraction pipeline on a subset of categories (e.g., Appliances, Fittings, Abrasives/Tools) that populates the 252-column schema accurately and strictly adheres to formatting rules will score highest with the judges.  
+TXT
++ 1
+
+https://www.youtube.com/live/9eKa0Hz0pJo?si=herAelydnQRtRAIF
+
+Here is what Unilog’s leadership explicitly clarified in their official UniHack explainer video (http://www.youtube.com/watch?v=9eKa0Hz0pJo):
+
+1. You Do NOT Need to Fabricate External Reference Files
+In the session, Shaji Jose (VP Product Engineering) and Ramachandra (VP Content Services) directly addressed how data enrichment must work:
+
+Manufacturer Web Search / Retrieval is Part of the Problem:
+
+They explained that in real life, Unilog receives only minimal input strings (Part Number, minimal text). The pipeline is expected to search the web (specifically manufacturer websites, product PDFs, and spec sheets) to retrieve the missing specifications [19:08], [23:11], [24:45].
+
+Strict Exclusion Rule:
+
+They explicitly forbade scraping or sourcing data from consumer marketplace/e-commerce sites like Amazon or eBay [23:23], [25:22]. Sourcing must come from official manufacturer sites and documentation [23:17].
+
+Citation / Source URLs:
+
+The delivery format has columns MFR URL, Ref URL 1, Ref URL 2, etc. You are expected to record the exact source URLs where the specifications were retrieved [25:36].
+
+2. Evaluation Criteria & Judging Weights
+The judges confirmed that all entries will be scored equally across four criteria [30:49]:
+
+Accuracy of Enriched Data (25%): How well your attributes match ground truth specifications.
+
+Quality & Standard Compliance (25%): Compliance with field formats, casing rules, and character limits (e.g., Invoice ≤40 chars, Mobile 60–80 chars).
+
+Scalability & Cost Efficiency (25%): Capability to scale to 750k SKUs/month without exorbitant API costs [18:13], [32:12].
+
+Innovation in Approach (25%): Agentic workflows, deterministic rule normalizers, and automated human-in-the-loop fallback mechanisms.
+
+3. Key Takeaway for Your Solution
+Input: Use Unihack_ Sample Dataset - Input.csv (1,000 rows).
+
+Ground Truth Schema: Use Unihack_ Expected Output - Delivery Format.csv (252 columns).
+
+Enrichment Engine: Search official manufacturer websites/datasheets using the Mfg_Part_Num + Part_Desc to populate technical specifications, convert units/fractions using rule-based functions, and format the output across all 5 target description styles and 50 attribute columns.
+
+
+Introductory & Problem Statement Explainer Session | UniHack
+Hack2skill · 555 views
+
+
+and what about the mentioned xlsx in solution guides are we supposed to make it ourself?
+
+No, you do not need to create or simulate those large XLSX files.
+
+Here is the exact reality of how the hackathon resources and evaluation work:
+
+1. What the Organizers Actually Expect
+In the official explainer session, Unilog's Vice Presidents (Shaji Jose and Ramachandra Raji) confirmed:
+
+The provided data is all you need to start: The core challenge is taking the Unihack_ Sample Dataset - Input.csv (1,000 messy supplier lines) and transforming them into the schema demonstrated in Unihack_ Expected Output - Delivery Format.csv (the 252-column schema),.
+
+Missing specs are resolved via Web Search/Retrieval: In real life, content analysts do not look up an infinite static Excel sheet for every spec—they search official manufacturer websites, manuals, and technical spec sheets,. The organizers explicitly instructed teams to use web search/scraping across manufacturer domains and cite the source URLs in MFR URL, Ref URL 1..5,.
+
+2. How to Handle the Rules Mentioned in the Guide Without the XLSX Files
+The reference files listed in the solution guide were simply internal Unilog rulebooks and lookups. You can implement all their core logic directly in Python:  
+TXT
+
+Mentioned XLSX in Guide	What It Contains	How You Solve It Directly in Code
+Decimal_Fraction.xlsx
+
+  
+TXT
+
+63 decimal-to-fraction inch mappings (e.g., 0.5→1/2, 0.25→1/4)  
+TXT
+
+Simple Python function / lookup dict that maps floating decimals into standard trade fractions (e.g., 50.25 in → 50-1/4 in).  
+TXT
+
+Master_UOM_Standards.xlsx
+
+  
+TXT
+
+Approved unit abbreviations and spacing rules  
+TXT
+
+Regex normalizer mapping "inches", "IN.", "inch" to "in", enforcing space conventions (24 in instead of 24in).  
+TXT
+
+UniCat_Manufacturer_and_Brand_List.xlsx
+
+  
+TXT
+
+27k canonical manufacturer and brand names  
+TXT
+
+Fuzzy matching / LLM canonicalization that strips supplier noise (e.g., "Freud Inc (2435)" → DIABLO®, "Jam Industrial Supply LLC" → 3M®).
+UNILOG_INTERNAL_CONTENT_GUIDELINES.docx
+
+  
+TXT
+
+Field construction formulas and character caps  
+TXT
+
+Pydantic / Rule constraints derived directly from the guide:  
+TXT
+
+
+• Invoice: ≤40 chars, ALL CAPS  
+TXT
+
+
+• Mobile: 60–80 chars  
+TXT
+
+
+• Title: [Brand] + [Series] + [MPN] + [Item Type] + [Attributes]
+
+  
+TXT
+
+Summary Checklist for Your Team
+Inputs: Ingest Unihack_ Sample Dataset - Input.csv.
+
+Targets: Populate the columns found in Unihack_ Expected Output - Delivery Format.csv.
+
+Retrieval: Search manufacturer documentation for technical specs based on Mfg_Part_Num + Part_Desc,.
+
+Validation: Apply deterministic rule functions (UOM normalization, trade fractions, and length checks).  
+TXT

@@ -1,0 +1,76 @@
+Here is a structured, comprehensive breakdown of all key points, guidelines, and rules stated by the host (Ganesh from Hack2Skill) and Unilog leadership (Shaji Jose, VP Product Engineering, and Ramachandra Raji, VP Content Services) in the explainer session,:
+
+1. About Unilog & The Core Business
+Company Background: Founded in 1998, Unilog provides product content creation, catalog publishing, PIM (Product Information Management), DAM (Digital Asset Management), taxonomy management, and connected B2B e-commerce platforms,,.
+
+Scale & Recognition: They support over 400+ B2B customers. Their platform (CX1) holds top ratings in Gartner and Paradigm B2B evaluations (including 10 out of 12 medals and 7 gold medals),,.
+
+Primary Operating Segments: Primarily industrial B2B domains such as HVAC, plumbing, electricals, hardware, and manufacturing, though the solution must be generic across industries,,.
+
+2. The Core Problem Statement & Business Goal
+The Scale Bottleneck: Product content enrichment is currently semi-automated and heavily reliant on manual human effort,.
+
+5x Capacity Target: Unilog currently enriches around 150,000 SKUs per month manually/semi-manually. They want an AI/technology-driven pipeline to scale throughput 5x to 750,000 SKUs per month with the same operational capacity,,.
+
+Input-to-Output Expectation: The system receives minimal, fragmented supplier product data (part number, manufacturer, basic string) and must transform it into accurate, structured, commerce-ready, and enriched product intelligence,,,.
+
+3. Data Sourcing & Web Search Rules
+Mandatory Web Search / Retrieval: Participants are expected to take the minimal input data and search external sources to figure out the full product specifications,,.
+
+Allowed Sources: Manufacturer official websites, product catalogs, technical spec sheets, user manuals, and manufacturer product videos,,,.
+
+STRICT PROHIBITION on Shopping/Marketplace Sites: You are strictly forbidden from scraping or sourcing data from e-commerce/retail consumer platforms like Amazon, eBay, etc.,.
+
+Source URL Citation Required: Your solution must capture and record the exact source URLs (MFR URL, Ref URL 1..5) where the specifications were retrieved,.
+
+4. Technical Flexibility & API Constraints
+Open Tech Stack: Participants are free to use any programming language (Python, Java, C#, etc.), frameworks, or architectures (standalone scripts or web applications),,.
+
+Paid vs. Open-Source LLM APIs: Paid commercial APIs (OpenAI, Gemini, etc.) and open-source models are both allowed,,.
+
+Cost Efficiency Constraint: Because the industrial distribution industry operates on thin margins, solutions using commercial APIs must remain highly cost-effective on a per-SKU basis,.
+
+Output Storage: You can store the enriched output in an Excel worksheet (e.g., matching the delivery template) or in a database,.
+
+5. Judging Criteria (Equal Weightage - 25% Each)
+The evaluators will score submissions based on four pillars,:
+
+Accuracy of Data: Precise extraction and mapping matching ground truth,.
+
+Quality of the Output: High-standard enrichment, compliance with structure/formatting guidelines, and explainable outputs,,.
+
+Scalability: Ability to handle high SKU volumes efficiently (toward the 750k SKUs/month benchmark),,.
+
+Innovation in Approach: Creative architecture, automated pipeline workflows, and reduction of manual intervention,,.
+
+6. Submission Deliverables & Deadlines
+Timeline: Submissions are open until August 23; evaluations run August 24 to September 1; Grand Finale on September 4,,.
+
+Team Structure: Teams of 2 to 4 members preferred (solo participation is also accepted),.
+
+Required Submission Items:
+
+Prototype Presentation Deck (PDF): Using the official hackathon template,.
+
+Workflow Diagram: A clear diagram showing how the enrichment pipeline works end-to-end.
+
+Live Prototype Link: A deployed, working URL (no broken links or localhost),.
+
+Public GitHub Repository: Public repo containing clear backend and pipeline code.
+
+Demo Video: A concise 3 to 4-minute walkthrough video explaining the problem, the tech stack, the workflow, and a live demonstration,,.
+
+Maturity Level: A working MVP is fully sufficient; a full enterprise-ready production deployment is not required,.
+
+7. Prizes & Career Opportunities
+Total Prize Pool: ₹5,00,000.
+
+1st Place (Winner): ₹2,00,000.
+
+1st Runner-Up: ₹1,50,000.
+
+2nd Runner-Up: ₹1,00,000.
+
+2 Special Category Awards: ₹25,000 each.
+
+Hiring: Top performers will be considered for internship and full-time hiring opportunities at Unilog.

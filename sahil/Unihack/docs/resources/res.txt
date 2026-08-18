@@ -1,0 +1,22 @@
+Resources
+Your ultimate guide! Explore this section for best practices and valuable resources to maximize your experience and get the most out of this initiative.
+
+Solution Guide : Use this document to understand what is expected from your solution and how to approach the problem statement.
+
+It will guide you through the solution-building process and help you use the provided dataset effectively while developing your prototype.
+
+Click Here for the Solution Guide
+
+
+
+Sample Dataset : This is a sample dataset you can use to test your solution and understand the type of data you may receive. Use it as a starting point to test your solution and get familiar with the data structure. 
+
+Click Here for the Sample Input Dataset[Download]
+
+
+
+Expected Output : This sheet contains the static headers that your solution is expected to populate.
+
+Please do not change or modify the headers. Use the sample responses provided as a reference to understand what is expected in each field. Make sure your solution populates all the required headers in the expected output.
+
+Click Here for the Expected Output Sheet[Download]
