@@ -1,0 +1,51 @@
+--- INPUTS TAKEN FROM CSV ---
+Manufacturer Name: Freud Inc
+Part Number / MPN: DCB518ASTS06G
+Raw Manufacturer String: Freud Inc (2435)
+
+--- DOMAIN DISCOVERY ---
+Discovered Official Domain: freudtools.com
+
+--- EXACT PRODUCT URL DISCOVERED ---
+URL: https://diablotools.com/products/DCB518ASTS06G
+
+--- SCRAPED PAGE MARKDOWN (Crawl4AI Processed) ---
+### METADATA
+**Title**: DCB518ASTS06G | Sanding | Sanding Belts | 1/2" x 18"
+**Description**: Learn all about #DCB518ASTS06G. Diablo's 1/2" x 18" detail file sanding belts include break-through innovations that improve performance, extend sanding life, and increase productivity. Featuring a premium aluminum oxide blend, these belts remove material faster than other sanding belts and offer an extra-long sanding life. The stearate coating reduces build-up while the premium joint connection ensures the belt can withstand a variety of sanding applications such as heavy stock removal, planing and sanding. Clog-SHIELD™, Diablo's own blend of grinding agents, reduces loading while the superior grain bonding system, ENDURA-BOND™, delivers longer life and extreme durability.
+
+
+### VISIBLE PAGE TEXT
+DCB518ASTS06G | Sanding | Sanding Belts | 1/2" x 18"
+Skip to content
+Skip to footer
+Search
+Advanced Search
+SIGN IN
+Sanding
+Sanding Belts
+1/2" x 18"
+1/2" x 18" Detail File Sanding Belt Assorted Pack (6-pc)
+WHERE TO BUY
+Like many companies,
+Diablo
+uses cookies and other technologies,
+                either for website
+                operation or
+Diablo
+'s advertising purposes. We want you to know that
+Diablo
+strives to
+                make
+                data
+                privacy a core value that we offer to you. In using our site, you consent to the use of these
+                cookies and other technologies.
+Change your preferences
+Compare Products
+Compare Products
+Recent Saves
+Recent Saves
+Support
+Support
+Scroll to Top
+Scroll to Top
