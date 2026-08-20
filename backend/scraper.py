@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 import io
 import requests
 from urllib.parse import urlparse
@@ -110,3 +110,4 @@ async def scrape_product_page(url: str) -> dict:
         return {"success": True, "markdown": final_text, "html": html, "url": url}
     else:
         return {"success": False, "markdown": "", "html": html, "reason": "Extracted text was too short"}
+
