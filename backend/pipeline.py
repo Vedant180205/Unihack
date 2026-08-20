@@ -1,8 +1,10 @@
-﻿import csv
+import csv
 import sys
 import asyncio
+import json
 from search_engine import find_manufacturer_domain, search_exact_product
 from scraper import scrape_product_page
+from extractor import process_scraped_file
 
 INPUT_CSV = r"..\docs\resources\Unihack_ Sample Dataset - Input.csv"
 
@@ -57,6 +59,7 @@ async def process_row(row):
     
     out_filename_txt = f"scraped_output_{part_num}.txt".replace("/", "_")
     out_filename_html = f"scraped_output_{part_num}.html".replace("/", "_")
+    out_filename_json = f"extracted_output_{part_num}.json".replace("/", "_")
     
     with open(out_filename_txt, 'w', encoding='utf-8') as f:
         f.write(output_text)
@@ -64,9 +67,22 @@ async def process_row(row):
     with open(out_filename_html, 'w', encoding='utf-8') as f:
         f.write(html_content)
         
-    print(f"\n--- Pipeline Success! ---")
+    print(f"\n--- Scrape Success! ---")
     print(f"Saved text report to {out_filename_txt}")
     print(f"Saved RAW UNPROCESSED HTML to {out_filename_html}")
+    
+    # 4. Phase 3 Extraction (extractor.py)
+    print(f"\n--- Running Extraction Engine (extractor.py) ---")
+    delivery_json = process_scraped_file(out_filename_txt)
+    
+    with open(out_filename_json, 'w', encoding='utf-8') as f:
+        json.dump(delivery_json, f, indent=2)
+        
+    print(f"[+] Saved 252-column delivery JSON to {out_filename_json}")
+    print(f"[+] INVOICE_DESC: {delivery_json.get('INVOICE_DESCRIPTION')}")
+    print(f"[+] MOBILE_DESC : {delivery_json.get('MOBILE_DESCRIPTION')}")
+    print(f"[+] SHORT_TITLE : {delivery_json.get('SHORT_DESCRIPTION')}")
+    print(f"[+] Confidence  : {delivery_json.get('confidence_score')}%")
 
 async def run_pipeline(limit=1):
     try:
