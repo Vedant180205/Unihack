@@ -46,3 +46,9 @@ MANIFEST
 # OS Files
 .DS_Store
 Thumbs.db
+
+# Large Model Weights & Scraped Dumps
+models/
+*.gguf
+scraped_output_*
+extracted_output_*

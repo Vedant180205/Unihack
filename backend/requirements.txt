@@ -1,0 +1,23 @@
+# Core LLM & Local Neural Inference
+llama-cpp-python>=0.3.0
+huggingface-hub>=0.20.0
+
+# Text Similarity & Entity Matching
+jellyfish>=1.0.0
+
+# Web Crawling & Scraping
+playwright>=1.40.0
+crawl4ai>=0.3.0
+beautifulsoup4>=4.12.0
+requests>=2.31.0
+httpx>=0.25.0
+
+# Data Processing & Storage
+duckdb>=0.9.0
+pandas>=2.1.0
+pydantic>=2.5.0
+
+# API & Web Framework
+fastapi>=0.104.0
+uvicorn>=0.24.0
+python-dotenv>=1.0.0
