@@ -21,7 +21,7 @@ def get_llm_instance() -> Llama:
         print(f"[*] Initializing local Llama.cpp engine with GGUF: {os.path.basename(MODEL_PATH)}")
         _llm_instance = Llama(
             model_path=MODEL_PATH,
-            n_ctx=2048,
+            n_ctx=4096,
             n_threads=4,
             verbose=False
         )
@@ -139,7 +139,7 @@ def extract_with_nuextract_gguf(text_content: str) -> Dict[str, Any]:
     
     # Extract clean spec and description lines from text
     lines = [l.strip() for l in text_content.splitlines() if l.strip() and not l.startswith("```") and not l.startswith("<")]
-    clean_text = "\n".join(lines[:40])
+    clean_text = "\n".join(lines[:30])[:2500]
     
     prompt = f"""<|input|>
 ### Template:
