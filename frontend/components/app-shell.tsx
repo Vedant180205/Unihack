@@ -44,12 +44,16 @@ interface BatchContextType {
   activeBatch: string
   setActiveBatch: (batchId: string) => void
   batches: BatchItem[]
+  rowCount: number
+  setRowCount: (count: number) => void
 }
 
 const BatchContext = createContext<BatchContextType>({
   activeBatch: 'BATCH-24.08.17',
   setActiveBatch: () => undefined,
   batches: INITIAL_BATCHES,
+  rowCount: 1000,
+  setRowCount: () => undefined,
 })
 
 export const useBatch = () => useContext(BatchContext)
@@ -68,13 +72,14 @@ const nav = [
   { href: '/benchmark', label: 'Benchmark', icon: Gauge },
 ]
 
-export function AppShell({ children, title }: { children: React.ReactNode; title: string }) {
+function AppShellInner({ children, title }: { children: React.ReactNode; title: string }) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const [open, setOpen] = useState(false)
   const [pending, setPending] = useState(14)
-  const [activeBatch, setActiveBatchState] = useState<string>('BATCH-24.08.17')
+  const [activeBatch, setActiveBatchState] = useState<string>('Batch 1')
   const [batches] = useState<BatchItem[]>(INITIAL_BATCHES)
+  const [rowCount, setRowCountState] = useState<number>(1000)
   const [batchDropdownOpen, setBatchDropdownOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement | null>(null)
 
@@ -84,11 +89,44 @@ export function AppShell({ children, title }: { children: React.ReactNode; title
     setActiveBatchState(batchId)
     try {
       localStorage.setItem('uniclean_active_batch', batchId)
+      // If historical batch, sync rowCount accordingly
+      const match = batches.find((b) => b.id === batchId)
+      if (match && match.id !== 'Batch 1') {
+        const parsed = parseInt(match.records.replace(/,/g, ''), 10)
+        if (!isNaN(parsed) && parsed > 0) {
+          setRowCountState(parsed)
+        }
+      }
     } catch {}
   }
 
-  // Sync batch from localStorage or URL param on initial render
+  const setRowCount = (count: number) => {
+    setRowCountState(count)
+    try {
+      localStorage.setItem('uniclean_active_row_count', String(count))
+    } catch {}
+  }
+
+  // Sync batch and row count from localStorage or URL param on initial render
   useEffect(() => {
+    const urlRows = searchParams?.get('rows')
+    if (urlRows) {
+      const parsed = parseInt(urlRows, 10)
+      if (!isNaN(parsed) && parsed > 0) {
+        setRowCountState(parsed)
+      }
+    } else {
+      try {
+        const savedRows = localStorage.getItem('uniclean_active_row_count')
+        if (savedRows) {
+          const parsed = parseInt(savedRows, 10)
+          if (!isNaN(parsed) && parsed > 0) {
+            setRowCountState(parsed)
+          }
+        }
+      } catch {}
+    }
+
     const urlBatch = searchParams?.get('batch')
     if (urlBatch) {
       const match = batches.find((b) => b.id.toLowerCase() === urlBatch.toLowerCase())
@@ -121,10 +159,20 @@ export function AppShell({ children, title }: { children: React.ReactNode; title
     }
   }, [batchDropdownOpen])
 
-  const currentBatchObj = batches.find((b) => b.id === activeBatch) || batches[0]
+  // Dynamic batch records string for Batch 1
+  const computedBatches = useMemo(() => {
+    return batches.map((b) => {
+      if (b.id === 'Batch 1') {
+        return { ...b, records: rowCount.toLocaleString() }
+      }
+      return b
+    })
+  }, [batches, rowCount])
+
+  const currentBatchObj = computedBatches.find((b) => b.id === activeBatch) || computedBatches[0]
 
   return (
-    <BatchContext.Provider value={{ activeBatch, setActiveBatch, batches }}>
+    <BatchContext.Provider value={{ activeBatch, setActiveBatch, batches: computedBatches, rowCount, setRowCount }}>
       <PendingContext.Provider value={{ pending, decrement }}>
         <div className="min-h-screen bg-background text-foreground">
           {/* Sidebar */}
@@ -335,6 +383,14 @@ export function AppShell({ children, title }: { children: React.ReactNode; title
         </div>
       </PendingContext.Provider>
     </BatchContext.Provider>
+  )
+}
+
+export function AppShell(props: { children: React.ReactNode; title: string }) {
+  return (
+    <React.Suspense fallback={<div className="min-h-screen bg-background text-foreground" />}>
+      <AppShellInner {...props} />
+    </React.Suspense>
   )
 }
 

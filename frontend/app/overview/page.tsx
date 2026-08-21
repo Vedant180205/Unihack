@@ -20,7 +20,8 @@ import {
   Sparkles,
   Activity,
   CheckCircle2,
-  RefreshCw
+  RefreshCw,
+  Layers
 } from 'lucide-react'
 import { AppShell, SectionHeading, useBatch } from '@/components/app-shell'
 import { ExportReportModal } from '@/components/export-report-modal'
@@ -60,7 +61,7 @@ function useAnimatedCounter(target: number, duration: number = 1600, decimals: n
 
 export default function OverviewPage() {
   const [exportModalOpen, setExportModalOpen] = useState(false)
-  const { activeBatch, setActiveBatch, batches } = useBatch()
+  const { activeBatch, setActiveBatch, batches, rowCount } = useBatch()
   const [animationStarted, setAnimationStarted] = useState(false)
 
   // Trigger stagger animation on initial mount
@@ -71,17 +72,54 @@ export default function OverviewPage() {
     return () => clearTimeout(timer)
   }, [])
 
-  // Animated counters starting from 0 to target values
-  const recordsProcessed = useAnimatedCounter(40620, 1800, 0)
-  const autoApproved = useAnimatedCounter(96.8, 1600, 1)
-  const humanReview = useAnimatedCounter(14, 1200, 0)
-  const avgConfidence = useAnimatedCounter(93.4, 1500, 1)
-  const processingVelocity = useAnimatedCounter(12.4, 1600, 1)
+  // Effective row count N from active upload/workbench selection
+  const N = useMemo(() => {
+    if (activeBatch !== 'Batch 1') {
+      const match = batches.find((b) => b.id === activeBatch)
+      if (match) {
+        const parsed = parseInt(match.records.replace(/,/g, ''), 10)
+        if (!isNaN(parsed) && parsed > 0) return parsed
+      }
+    }
+    return rowCount || 1000
+  }, [activeBatch, batches, rowCount])
 
-  const highConf = useAnimatedCounter(68, 1500, 0)
-  const approvedPct = useAnimatedCounter(23, 1400, 0)
-  const reviewPct = useAnimatedCounter(6, 1200, 0)
-  const exceptionPct = useAnimatedCounter(3, 1000, 0)
+  // Dynamically derived numeric targets mapped to N
+  const targetAutoApprovedPct = 96.8
+  const targetAutoApprovedCount = Math.min(N, Math.max(1, Math.round(N * (targetAutoApprovedPct / 100))))
+  const targetHumanReviewCount = N <= 10 ? 1 : N <= 25 ? 2 : N <= 50 ? 3 : N <= 100 ? 7 : Math.max(1, Math.round(N * 0.014))
+  
+  const targetAvgConfidence = useMemo(() => {
+    if (activeBatch === 'Batch 1') return 99.4
+    if (activeBatch === 'BATCH-24.08.17') return 99.2
+    if (activeBatch === 'BATCH-24.08.16') return 96.8
+    return 91.4
+  }, [activeBatch])
+
+  const targetVelocity = useMemo(() => {
+    if (N <= 25) return Number((N * 0.2).toFixed(1))
+    if (N <= 100) return Number((N * 0.1).toFixed(1))
+    if (N <= 1000) return 12.4
+    return Number(((N / 1000) * 0.85).toFixed(1))
+  }, [N])
+
+  // Dynamically mapped distribution slice counts
+  const targetHighConfCount = Math.round(N * 0.68)
+  const targetApprovedCount = Math.round(N * 0.23)
+  const targetReviewCount = Math.max(1, Math.round(N * 0.06))
+  const targetExceptionCount = Math.max(1, Math.round(N * 0.03))
+
+  // Animated counters starting from 0 to dynamically mapped targets
+  const recordsProcessed = useAnimatedCounter(N, 1800, 0)
+  const autoApprovedCount = useAnimatedCounter(targetAutoApprovedCount, 1600, 0)
+  const humanReview = useAnimatedCounter(targetHumanReviewCount, 1200, 0)
+  const avgConfidence = useAnimatedCounter(targetAvgConfidence, 1500, 1)
+  const processingVelocity = useAnimatedCounter(targetVelocity, 1600, 1)
+
+  const highConfCount = useAnimatedCounter(targetHighConfCount, 1500, 0)
+  const approvedCount = useAnimatedCounter(targetApprovedCount, 1400, 0)
+  const reviewCount = useAnimatedCounter(targetReviewCount, 1200, 0)
+  const exceptionCount = useAnimatedCounter(targetExceptionCount, 1000, 0)
 
   const barData = [35, 48, 42, 65, 55, 72, 68, 87, 78, 94, 82, 100, 92, 96, 88, 100, 96, 100]
 
@@ -91,15 +129,20 @@ export default function OverviewPage() {
         {/* Top Hero Banner */}
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="mb-2 inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/5 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-cyan-300">
-              <span className="status-dot cyan" />
-              Live pipeline • Active Batch: {activeBatch}
-            </p>
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              <span className="inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/5 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-cyan-300">
+                <span className="status-dot cyan" />
+                Live pipeline • Active: {activeBatch}
+              </span>
+              <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-0.5 font-mono text-[10px] text-emerald-300 font-semibold">
+                Mapped Scope: {N.toLocaleString()} rows
+              </span>
+            </div>
             <h2 className="text-balance text-3xl font-semibold tracking-tight md:text-4xl text-foreground">
               Catalog intelligence, <span className="text-cyan-300">in motion.</span>
             </h2>
             <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">
-              Monitor enrichment throughput, review exceptions, and keep your enterprise catalog moving from raw data to trusted records.
+              Telemetry and 252-column normalization metrics dynamically synchronized for the active {N.toLocaleString()}-row dataset.
             </p>
           </div>
           <div className="flex gap-2">
@@ -112,7 +155,7 @@ export default function OverviewPage() {
             </Link>
             <Link
               href="/workbench"
-              className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:opacity-90 transition-opacity"
+              className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:opacity-90 transition-opacity shadow-md"
             >
               <Play className="size-4" />
               Open workbench
@@ -122,15 +165,15 @@ export default function OverviewPage() {
               className="inline-flex items-center gap-2 rounded-md border border-cyan-400/40 bg-cyan-400/10 px-4 py-2.5 text-sm font-medium text-cyan-300 hover:bg-cyan-400/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
             >
               <FileSpreadsheet className="size-4" />
-              Export report
+              Export report ({N.toLocaleString()} rows)
             </button>
           </div>
         </div>
 
-        {/* Top Stat Cards with dynamic count-up animation */}
+        {/* Top Stat Cards mapped to uploaded rows */}
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {/* Stat 1: Records processed */}
-          <div className="panel p-5 relative overflow-hidden group">
+          <div className="panel p-5 relative overflow-hidden group border-cyan-400/30">
             <div className="flex items-start justify-between">
               <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
                 Records processed
@@ -140,42 +183,46 @@ export default function OverviewPage() {
             <p className="mt-4 font-mono text-3xl font-bold tracking-tight text-foreground transition-all">
               {recordsProcessed}
             </p>
-            <p className="mt-2 text-xs text-muted-foreground">+18.4% vs previous batch</p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              {N === 1000 ? 'Full benchmark dataset active' : `Scoped to ${N.toLocaleString()} rows from workbench`}
+            </p>
             <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-cyan-400 to-transparent opacity-60" />
           </div>
 
           {/* Stat 2: Auto-approved */}
-          <div className="panel p-5 relative overflow-hidden group">
+          <div className="panel p-5 relative overflow-hidden group border-emerald-400/30">
             <div className="flex items-start justify-between">
               <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-                Auto-approved
+                Auto-approved (96.8%)
               </p>
               <span className="status-dot emerald" />
             </div>
             <p className="mt-4 font-mono text-3xl font-bold tracking-tight text-emerald-400 transition-all">
-              {autoApproved}%
+              {autoApprovedCount} <span className="text-sm font-normal text-muted-foreground font-sans">/ {N.toLocaleString()} rows</span>
             </p>
-            <p className="mt-2 text-xs text-muted-foreground">Target threshold 94.0%</p>
+            <p className="mt-2 text-xs text-muted-foreground">Target threshold 94.0% verified</p>
             <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-emerald-400 to-transparent opacity-60" />
           </div>
 
           {/* Stat 3: Human review */}
-          <div className="panel p-5 relative overflow-hidden group">
+          <div className="panel p-5 relative overflow-hidden group border-amber-400/30">
             <div className="flex items-start justify-between">
               <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-                Human review
+                Human review (&lt;50%)
               </p>
               <span className="status-dot amber" />
             </div>
             <p className="mt-4 font-mono text-3xl font-bold tracking-tight text-amber-300 transition-all">
-              {humanReview}
+              {humanReview} <span className="text-sm font-normal text-muted-foreground font-sans">exceptions</span>
             </p>
-            <p className="mt-2 text-xs text-muted-foreground">Items require attention</p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              {((targetHumanReviewCount / N) * 100).toFixed(1)}% of active {N.toLocaleString()} batch
+            </p>
             <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-amber-400 to-transparent opacity-60" />
           </div>
 
           {/* Stat 4: Avg confidence */}
-          <div className="panel p-5 relative overflow-hidden group">
+          <div className="panel p-5 relative overflow-hidden group border-cyan-400/30">
             <div className="flex items-start justify-between">
               <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
                 Avg. confidence
@@ -183,9 +230,9 @@ export default function OverviewPage() {
               <span className="status-dot cyan" />
             </div>
             <p className="mt-4 font-mono text-3xl font-bold tracking-tight text-cyan-300 transition-all">
-              {avgConfidence}
+              {avgConfidence}%
             </p>
-            <p className="mt-2 text-xs text-muted-foreground">+2.1 points this run</p>
+            <p className="mt-2 text-xs text-muted-foreground">Weighted across {N.toLocaleString()} records</p>
             <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-cyan-400 to-transparent opacity-60" />
           </div>
         </div>
@@ -229,7 +276,7 @@ export default function OverviewPage() {
                 <span>12:00</span>
                 <span>16:00</span>
                 <span className="text-cyan-300 font-semibold flex items-center gap-1">
-                  <span className="size-1 rounded-full bg-cyan-300 animate-ping" /> Now
+                  <span className="size-1 rounded-full bg-cyan-300 animate-ping" /> Now ({N.toLocaleString()} records)
                 </span>
               </div>
             </div>
@@ -240,7 +287,7 @@ export default function OverviewPage() {
             <SectionHeading
               eyebrow="Confidence distribution"
               title="Model certainty"
-              description="Current batch across records"
+              description={`Current batch across ${N.toLocaleString()} records`}
             />
             <div className="flex items-center justify-center py-4">
               <div
@@ -255,32 +302,51 @@ export default function OverviewPage() {
               >
                 <div className="flex size-32 flex-col items-center justify-center rounded-full bg-card shadow-inner">
                   <span className="font-mono text-3xl font-bold text-foreground">
-                    {avgConfidence}
+                    {avgConfidence}%
                   </span>
-                  <span className="text-xs text-muted-foreground">avg score</span>
+                  <span className="text-xs text-muted-foreground font-mono">avg score</span>
                 </div>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3 text-xs pt-2">
-              <div className="p-2 rounded-lg bg-background/50 border border-border/40">
-                <span className="mr-1.5 inline-block size-2 rounded-full bg-cyan-300" />
-                <span className="text-muted-foreground">High confidence</span>
-                <b className="float-right font-mono text-cyan-300">{highConf}%</b>
+              <div className="p-2.5 rounded-lg bg-background/50 border border-border/40 space-y-0.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground flex items-center gap-1.5">
+                    <span className="size-2 rounded-full bg-cyan-300" /> High (68%)
+                  </span>
+                  <b className="font-mono text-cyan-300">{highConfCount}</b>
+                </div>
+                <p className="text-[10px] text-muted-foreground/80 font-mono">records</p>
               </div>
-              <div className="p-2 rounded-lg bg-background/50 border border-border/40">
-                <span className="mr-1.5 inline-block size-2 rounded-full bg-emerald-400" />
-                <span className="text-muted-foreground">Approved</span>
-                <b className="float-right font-mono text-emerald-400">{approvedPct}%</b>
+
+              <div className="p-2.5 rounded-lg bg-background/50 border border-border/40 space-y-0.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground flex items-center gap-1.5">
+                    <span className="size-2 rounded-full bg-emerald-400" /> Approved (23%)
+                  </span>
+                  <b className="font-mono text-emerald-400">{approvedCount}</b>
+                </div>
+                <p className="text-[10px] text-muted-foreground/80 font-mono">records</p>
               </div>
-              <div className="p-2 rounded-lg bg-background/50 border border-border/40">
-                <span className="mr-1.5 inline-block size-2 rounded-full bg-amber-300" />
-                <span className="text-muted-foreground">Review</span>
-                <b className="float-right font-mono text-amber-300">{reviewPct}%</b>
+
+              <div className="p-2.5 rounded-lg bg-background/50 border border-border/40 space-y-0.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground flex items-center gap-1.5">
+                    <span className="size-2 rounded-full bg-amber-300" /> Review (6%)
+                  </span>
+                  <b className="font-mono text-amber-300">{reviewCount}</b>
+                </div>
+                <p className="text-[10px] text-muted-foreground/80 font-mono">records</p>
               </div>
-              <div className="p-2 rounded-lg bg-background/50 border border-border/40">
-                <span className="mr-1.5 inline-block size-2 rounded-full bg-rose-400" />
-                <span className="text-muted-foreground">Exception</span>
-                <b className="float-right font-mono text-rose-400">{exceptionPct}%</b>
+
+              <div className="p-2.5 rounded-lg bg-background/50 border border-border/40 space-y-0.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground flex items-center gap-1.5">
+                    <span className="size-2 rounded-full bg-rose-400" /> Exception (3%)
+                  </span>
+                  <b className="font-mono text-rose-400">{exceptionCount}</b>
+                </div>
+                <p className="text-[10px] text-muted-foreground/80 font-mono">records</p>
               </div>
             </div>
           </section>
@@ -324,6 +390,8 @@ export default function OverviewPage() {
               <tbody>
                 {batches.map((batch) => {
                   const isCurrent = batch.id === activeBatch
+                  const displayRecords = isCurrent && batch.id === 'Batch 1' ? N.toLocaleString() : batch.records
+
                   return (
                     <tr
                       key={batch.id}
@@ -342,7 +410,7 @@ export default function OverviewPage() {
                         </div>
                       </td>
                       <td className="px-5 py-4">{batch.source}</td>
-                      <td className="px-5 py-4 font-mono text-xs">{batch.records}</td>
+                      <td className="px-5 py-4 font-mono text-xs font-semibold">{displayRecords}</td>
                       <td className="px-5 py-4 font-mono text-xs text-emerald-300">{batch.confidence}</td>
                       <td className="px-5 py-4">
                         <span

@@ -186,7 +186,7 @@ function Counter({ label, value, type }: { label: string; value: string; type: '
 export default function Workbench() {
   const router = useRouter()
   const { decrement } = usePendingQueue()
-  const { activeBatch } = useBatch()
+  const { activeBatch, setRowCount, rowCount: globalRowCount } = useBatch()
   const [items, setItems] = useState<Item[]>(seedDataset)
   const [selected, setSelected] = useState<Item>(seedDataset[0])
   const [query, setQuery] = useState('')
@@ -222,6 +222,8 @@ export default function Workbench() {
 
   const handleSetRowLimit = (limit: number | 'all') => {
     setRowLimit(limit)
+    const effectiveNum = limit === 'all' ? items.length : limit
+    setRowCount(effectiveNum)
     if (limit === 'all') {
       setCustomInput('')
       toast.info(`Showing all ${items.length} records in dataset`)
@@ -237,6 +239,7 @@ export default function Workbench() {
     if (!isNaN(parsed) && parsed > 0) {
       const clamped = Math.min(parsed, items.length)
       setRowLimit(clamped)
+      setRowCount(clamped)
       setCustomInput(String(clamped))
       toast.success(`Row scope set to ${clamped} items`)
     } else if (customInput.toLowerCase() === 'all') {
@@ -247,6 +250,8 @@ export default function Workbench() {
   }
 
   const handleLaunchPipeline = () => {
+    const activeRows = rowLimit === 'all' ? 1000 : rowLimit
+    setRowCount(activeRows)
     setIsLaunching(true)
     setLaunchProgress(20)
     setLaunchStage(`Ingesting sliced batch (${filtered.length} rows)...`)
@@ -266,7 +271,7 @@ export default function Workbench() {
       setLaunchStage('Pipeline launched! Opening Overview...')
       toast.success(`Enrichment pipeline launched for ${filtered.length} records! Redirecting to Overview...`)
       setTimeout(() => {
-        router.push(`/overview?batch=${encodeURIComponent(activeBatch)}`)
+        router.push(`/overview?batch=${encodeURIComponent(activeBatch)}&rows=${activeRows}`)
       }, 350)
     }, 1300)
   }
