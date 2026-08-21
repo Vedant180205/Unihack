@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Bell, Boxes, ChevronDown, ClipboardCheck, Database, Gauge, LayoutDashboard, Menu, Search, Settings2, Sparkles, X } from 'lucide-react'
+import { Bell, Boxes, ChevronDown, ClipboardCheck, Database, Gauge, LayoutDashboard, Menu, Search, Settings2, Sparkles, UploadCloud, X } from 'lucide-react'
 import { createContext, useContext, useState } from 'react'
 import { Toaster } from 'sonner'
 
@@ -10,7 +10,8 @@ const PendingContext = createContext<{ pending: number; decrement: () => void }>
 export const usePendingQueue = () => useContext(PendingContext)
 
 const nav = [
-  { href: '/', label: 'Overview', icon: LayoutDashboard },
+  { href: '/', label: 'Home & Upload', icon: UploadCloud },
+  { href: '/overview', label: 'Pipeline Overview', icon: LayoutDashboard },
   { href: '/workbench', label: 'Data Workbench', icon: Database },
   { href: '/audit', label: 'HITL Audit Queue', icon: ClipboardCheck },
   { href: '/benchmark', label: 'Benchmark', icon: Gauge },
