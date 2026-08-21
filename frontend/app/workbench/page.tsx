@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useMemo, useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   ArrowRight,
   Check,
@@ -16,7 +17,10 @@ import {
   RefreshCw,
   Hash,
   Database,
-  ArrowUpDown
+  ArrowUpDown,
+  Play,
+  RotateCcw,
+  UploadCloud
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { AppShell, SectionHeading, usePendingQueue, useBatch } from '@/components/app-shell'
@@ -180,6 +184,7 @@ function Counter({ label, value, type }: { label: string; value: string; type: '
 }
 
 export default function Workbench() {
+  const router = useRouter()
   const { decrement } = usePendingQueue()
   const { activeBatch } = useBatch()
   const [items, setItems] = useState<Item[]>(seedDataset)
@@ -191,6 +196,11 @@ export default function Workbench() {
   // Row limit control states
   const [rowLimit, setRowLimit] = useState<number | 'all'>(10)
   const [customInput, setCustomInput] = useState<string>('10')
+
+  // Launch pipeline action states
+  const [isLaunching, setIsLaunching] = useState(false)
+  const [launchProgress, setLaunchProgress] = useState(0)
+  const [launchStage, setLaunchStage] = useState('')
 
   // Apply row limit first, then search query
   const slicedItems = useMemo(() => {
@@ -236,6 +246,31 @@ export default function Workbench() {
     }
   }
 
+  const handleLaunchPipeline = () => {
+    setIsLaunching(true)
+    setLaunchProgress(20)
+    setLaunchStage(`Ingesting sliced batch (${filtered.length} rows)...`)
+
+    setTimeout(() => {
+      setLaunchProgress(55)
+      setLaunchStage('Validating 252-column schema targets...')
+    }, 400)
+
+    setTimeout(() => {
+      setLaunchProgress(85)
+      setLaunchStage('Spawning autonomous web & PDF agents...')
+    }, 850)
+
+    setTimeout(() => {
+      setLaunchProgress(100)
+      setLaunchStage('Pipeline launched! Opening Overview...')
+      toast.success(`Enrichment pipeline launched for ${filtered.length} records! Redirecting to Overview...`)
+      setTimeout(() => {
+        router.push(`/overview?batch=${encodeURIComponent(activeBatch)}`)
+      }, 350)
+    }, 1300)
+  }
+
   const approve = () => {
     setItems((all) =>
       all.map((i) => (i.sku === selected.sku ? { ...i, confidence: 96, status: 'Approved' } : i))
@@ -256,7 +291,7 @@ export default function Workbench() {
 
   return (
     <AppShell title="Data workbench">
-      <div className="mx-auto max-w-[1500px] space-y-5">
+      <div className="mx-auto max-w-[1500px] space-y-6">
         {/* Section Heading with Main Actions */}
         <SectionHeading
           eyebrow="Enrichment workspace"
@@ -488,6 +523,72 @@ export default function Workbench() {
             close={() => setInspector(false)}
             compact={inspector}
           />
+        </div>
+
+        {/* Bottom Banner: Launch Pipeline Action Card */}
+        <div className="panel p-6 sm:p-8 bg-gradient-to-r from-card via-card/95 to-cyan-950/20 border border-cyan-400/30 rounded-2xl shadow-xl space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-6">
+            <div className="space-y-1.5 max-w-xl">
+              <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3 py-0.5 text-xs font-medium text-cyan-300 font-mono tracking-wider uppercase">
+                <Sparkles className="size-3.5 animate-pulse" />
+                Batch Execution Scope: {filtered.length} of {items.length} Records Selected
+              </div>
+              <h3 className="text-xl font-bold tracking-tight text-foreground">
+                Ready to Execute Autonomous Enrichment Pipeline?
+              </h3>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Launch web crawlers, spec sheet PDF ingestion, neural attribute synthesis, and 252-column normalization for this dataset batch.
+              </p>
+            </div>
+
+            {/* Launch Action Button */}
+            <div className="flex flex-col sm:items-end gap-2">
+              <button
+                type="button"
+                onClick={handleLaunchPipeline}
+                disabled={isLaunching || filtered.length === 0}
+                className={`inline-flex items-center gap-2 rounded-xl px-7 py-3.5 text-sm font-semibold shadow-xl transition-all ${
+                  !isLaunching && filtered.length > 0
+                    ? 'bg-gradient-to-r from-cyan-400 to-emerald-400 text-slate-950 hover:opacity-95 hover:scale-[1.02] active:scale-[0.98]'
+                    : 'bg-muted text-muted-foreground cursor-not-allowed opacity-60'
+                }`}
+              >
+                {isLaunching ? (
+                  <>
+                    <RotateCcw className="size-4 animate-spin" />
+                    Launching Pipeline...
+                  </>
+                ) : (
+                  <>
+                    <Play className="size-4 fill-current" />
+                    Launch Pipeline for {filtered.length} Items →
+                  </>
+                )}
+              </button>
+              <p className="text-[11px] text-muted-foreground font-mono">
+                Redirects to Live Telemetry &amp; Pipeline Overview
+              </p>
+            </div>
+          </div>
+
+          {/* Launch Progress Animation Bar */}
+          {isLaunching && (
+            <div className="space-y-2 pt-2 border-t border-border/60 animate-in fade-in duration-200">
+              <div className="flex justify-between text-xs font-mono">
+                <span className="text-cyan-300 flex items-center gap-2">
+                  <RotateCcw className="size-3 animate-spin" />
+                  {launchStage}
+                </span>
+                <span className="text-foreground font-bold">{launchProgress}%</span>
+              </div>
+              <div className="h-2 w-full overflow-hidden rounded-full bg-accent">
+                <div
+                  className="h-full bg-gradient-to-r from-cyan-400 to-emerald-400 transition-all duration-300"
+                  style={{ width: `${launchProgress}%` }}
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         <ExportReportModal
