@@ -1,16 +1,15 @@
-import os
+﻿import os
 import re
 import json
-from fractions import Fraction
-from typing import Dict, Any, List, Optional, Tuple
-import jellyfish
+import csv
+from typing import Dict, Any, List, Tuple
 from groq import Groq
 from dotenv import load_dotenv
 
 load_dotenv()
 
 # ---------------------------------------------------------
-# Groq API Extraction Engine (Agentic Web Search)
+# Groq Client
 # ---------------------------------------------------------
 _groq_client = None
 
@@ -24,299 +23,444 @@ def get_groq_client():
     return _groq_client
 
 # ---------------------------------------------------------
-# Attribute Schema
+# JSON Sanitizer
 # ---------------------------------------------------------
-EXTRACTION_SCHEMA_TEMPLATE = {
-    "brand": "",
-    "product_type": "",
-    "series": "",
-    "width": "",
-    "length": "",
-    "diameter": "",
-    "material": "",
-    "grit": "",
-    "voltage": "",
-    "amperage": "",
-    "package_quantity": "",
-    "key_features": []
-}
-
 def sanitize_and_parse_json(raw_str: str) -> Dict[str, Any]:
-    """Sanitizes unescaped quotes inside JSON strings and parses safely."""
-    # Find JSON block
     match = re.search(r'\{[\s\S]*\}', raw_str)
     if not match:
         return {}
-        
     json_text = match.group(0)
-    cleaned_lines = []
-    
-    # Very basic quote sanitization
-    for line in json_text.split('\n'):
-        # match a value like: "key": "value with "quotes" inside",
-        kv_match = re.match(r'^(\s*"[^"]+"\s*:\s*)"(.*)"(,?)\s*$', line)
-        if kv_match:
-            prefix, inner_val, suffix = kv_match.groups()
-            safe_val = inner_val.replace('\\"', '"').replace('"', '\\"')
-            cleaned_lines.append(f"{prefix}\"{safe_val}\"{suffix}")
-        else:
-            cleaned_lines.append(line)
-            
-    fixed_json_text = "\n".join(cleaned_lines)
     try:
-        return json.loads(fixed_json_text)
-    except Exception as e:
-        print(f"[WARN] JSON repair fallback error: {e}")
-        return {}
+        return json.loads(json_text)
+    except Exception:
+        json_text = re.sub(r',\s*([}\]])', r'\1', json_text)
+        try:
+            return json.loads(json_text)
+        except Exception as e:
+            print(f"[WARN] JSON parse failed: {e}")
+            return {}
 
-def extract_with_groq(product_url: str) -> Dict[str, Any]:
-    """
-    Executes Groq Agent to search the URL and extract structured product data.
-    """
-    client = get_groq_client()
-    
-    schema_str = json.dumps(EXTRACTION_SCHEMA_TEMPLATE, indent=2)
-    
-    prompt = f"""You are a precise JSON data extractor. I have a product at this URL: {product_url}
-    
-    1. Use your browser_search tool to visit this URL and read the product specifications.
-    2. Extract the exact product specifications based on the text on that page.
-    3. Output ONLY raw JSON matching this exact schema:
-    {schema_str}
-    
-    4. If a field is not found on the page, output an empty string "". DO NOT hallucinate.
-    """
-    
-    print(f"[*] Sending URL to Groq Agent (openai/gpt-oss-120b)...")
-    
-    # Do not use stream=True so we can just grab the final output easily
-    completion = client.chat.completions.create(
+# ---------------------------------------------------------
+# Groq Prompt — Open-Schema with Noise Filter
+# ---------------------------------------------------------
+GROQ_SYSTEM_PROMPT = """You are a precise industrial product data extractor.
+Your job is to visit a product page and extract ONLY factual technical specifications about the specific product listed.
+
+NOISE FILTER — DO NOT EXTRACT ANY OF THE FOLLOWING:
+- Navigation menus, headers, footers, breadcrumbs, site links
+- Prices, discounts, shipping info, availability, stock counts, cart info
+- Customer reviews, star ratings, Q&A sections, testimonials
+- Related/similar product recommendations or cross-sells
+- Promotional text, marketing slogans, sales banners, newsletter signups
+- Social media stats, share buttons, follower counts
+- Store info, contact details, company history, about us content
+- "Customers also bought" or "Frequently bought together" sections
+- Website statistics, traffic data, or analytics
+
+ONLY EXTRACT information that is a factual technical specification or physical attribute
+of THIS specific product — dimensions, materials, electrical ratings, standards, certifications,
+compatible equipment, application types, included accessories, physical properties, etc."""
+
+GROQ_OUTPUT_INSTRUCTIONS = """
+Return a single JSON object with EXACTLY these 7 top-level keys:
+
+1. "raw_attributes" — ALL product technical specifications you find. COMPLETELY OPEN-ENDED.
+   Use the exact attribute names as shown on the page.
+   Each entry: "Attribute Name": {"value": "...", "source": "webpage|pdf|both"}
+   Include EVERYTHING: grit, backing, material, motor size, blade diameter, arbor size, etc.
+   DO NOT limit to a predefined list.
+
+2. "identifiers" — with keys: "UPC", "EAN", "GTIN", "UNSPSC"
+   Each: {"value": "...", "source": "webpage|pdf|both|""}
+
+3. "dimensions" — physical package/product dimensions with keys:
+   "length", "width", "height", "weight", "diameter", "volume"
+   Each: {"value": "...", "uom": "in/mm/lbs/kg/etc", "source": "..."}
+
+4. "documents" — URLs to any downloadable documents found on the page, with keys:
+   "SDS", "Specification Sheet", "Installation Manual", "Service Manual",
+   "Owners Manual", "Catalog", "Technical Bulletin", "Line Drawing"
+   Each: {"value": "https://...", "source": "webpage|pdf|""}
+
+5. "images" — product image URLs with keys:
+   "Product Image", "Alternate Image 1", "Alternate Image 2", "Alternate Image 3", "Alternate Image 4"
+   Each: {"value": "https://...", "source": "webpage|""}
+
+6. "descriptions" — with keys:
+   "product_name", "short_desc", "long_desc", "key_features" (list), "application",
+   "includes", "standards", "country_of_origin", "warranty", "brand", "series", "product_type"
+   Each: {"value": "..." or [...], "source": "webpage|pdf|both|""}
+
+7. "pricing" — with keys: "list_price", "currency", "selling_qty", "selling_uom"
+   Each: {"value": "...", "source": "webpage|""}
+
+STRICT RULES:
+- raw_attributes is COMPLETELY OPEN-ENDED. Add as many keys as you find on the page.
+- Empty string "" for value AND source if not found. NEVER invent data.
+- Source must be one of: "webpage", "pdf", "both", or "" (not found).
+- Return the JSON directly as pure text. DO NOT use any tool calls or function calls (like "json") to return your answer. 
+- Output MUST be valid JSON wrapped in ```json ... ``` and nothing else."""
+
+def extract_with_groq(product_url: str, pdf_text: str = "") -> Dict[str, Any]:
+    source_a = f"SOURCE A — PRODUCT WEBPAGE (use browser_search to visit):\n{product_url}"
+    source_b = ""
+    if pdf_text.strip():
+        source_b = f"\n\nSOURCE B — PDF SPEC SHEET (pre-extracted text, read directly, do NOT browse):\n{pdf_text[:6000]}"
+        sources_desc = "SOURCE A (webpage) AND SOURCE B (PDF spec sheet)"
+    else:
+        sources_desc = "SOURCE A (webpage) only"
+
+    user_prompt = f"""Extract all product data from {sources_desc}.
+
+{source_a}{source_b}
+
+{GROQ_OUTPUT_INSTRUCTIONS}"""
+
+    print(f"[*] Sending to Groq Agent (openai/gpt-oss-120b)...")
+    if pdf_text.strip():
+        print(f"[*] Sources: URL + {len(pdf_text)} chars of PDF spec text")
+    else:
+        print(f"[*] Sources: URL only")
+
+    completion = get_groq_client().chat.completions.create(
         model="openai/gpt-oss-120b",
         messages=[
-          {
-            "role": "user",
-            "content": prompt
-          }
+            {"role": "system", "content": GROQ_SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt}
         ],
         temperature=1,
-        max_completion_tokens=2048,
+        max_completion_tokens=4096,
         top_p=1,
         reasoning_effort="low",
         stream=False,
-        tools=[{"type":"browser_search"},{"type":"code_interpreter"}]
+        tools=[{"type": "browser_search"}]
     )
-    
+
     raw_output = completion.choices[0].message.content.strip()
-    print("[*] Received response from Groq API!")
-    print(raw_output)
-    
-    parsed_json = sanitize_and_parse_json(raw_output)
-    return parsed_json
+    print("[*] Groq responded!")
+    parsed = sanitize_and_parse_json(raw_output)
+    return parsed
 
 # ---------------------------------------------------------
-# Formatting logic
+# Helpers
 # ---------------------------------------------------------
-def split_value_and_uom(val_str: str) -> Tuple[str, str]:
+def _v(section: Dict, key: str) -> str:
+    """Get value only if source is non-empty (no citation = no value)."""
+    entry = section.get(key, {})
+    if not isinstance(entry, dict):
+        return str(entry) if entry else ""
+    if not entry.get("source", ""):
+        return ""
+    val = entry.get("value", "")
+    return str(val).strip() if val else ""
+
+def _vlist(section: Dict, key: str) -> List[str]:
+    """Get list value only if source is non-empty."""
+    entry = section.get(key, {})
+    if not isinstance(entry, dict):
+        return []
+    if not entry.get("source", ""):
+        return []
+    val = entry.get("value", [])
+    if isinstance(val, list):
+        return [str(v).strip() for v in val if v]
+    return [str(val).strip()] if val else []
+
+def _dim(section: Dict, key: str) -> Tuple[str, str]:
+    """Get dimension value and UOM only if source is non-empty."""
+    entry = section.get(key, {})
+    if not isinstance(entry, dict):
+        return "", ""
+    if not entry.get("source", ""):
+        return "", ""
+    return str(entry.get("value", "")).strip(), str(entry.get("uom", "")).strip()
+
+def split_value_uom(val_str: str) -> Tuple[str, str]:
+    """Parse '12000 rpm' -> ('12000', 'rpm')"""
     if not val_str:
         return "", ""
-    match = re.match(r'^([\d\.\-\/]+)\s*([A-Za-z]+.*)$', str(val_str).strip())
+    match = re.match(r'^([\d\.\-\/\s]+)\s*([A-Za-z%"\']+.*)$', str(val_str).strip())
     if match:
         return match.group(1).strip(), match.group(2).strip()
     return str(val_str).strip(), ""
 
-def generate_5_descriptions(attrs: Dict[str, Any], mpn: str, manufacturer: str, meta_desc: str = "") -> Dict[str, str]:
-    brand = attrs.get("brand") or manufacturer
-    mfr = manufacturer
-    prod_type = attrs.get("product_type") or "Tool Accessory"
-    series = attrs.get("series") or ""
-    
-    width = str(attrs.get("width") or "")
-    length = str(attrs.get("length") or "")
-    material = str(attrs.get("material") or "")
-    pkg_qty = str(attrs.get("package_quantity") or "")
-    
-    w_clean = width.replace(" in", "").replace('"', '').strip()
-    l_clean = length.replace(" in", "").replace('"', '').strip()
-    qty_clean = pkg_qty.replace(" ", "").upper()
-    dim_str = f"{w_clean}X{l_clean}" if (w_clean and l_clean) else width
-    
-    invoice_candidate = f"{brand} {dim_str} {prod_type} {qty_clean}".upper()
-    invoice_desc = re.sub(r'\s+', ' ', invoice_candidate).strip()[:40]
-    
-    mobile_parts = [p for p in [mfr, brand, prod_type, series, mpn] if p]
+# ---------------------------------------------------------
+# 5 Descriptions Generator
+# ---------------------------------------------------------
+def generate_5_descriptions(groq_json: Dict, mpn: str, manufacturer: str) -> Dict[str, str]:
+    desc = groq_json.get("descriptions", {})
+    attrs = groq_json.get("raw_attributes", {})
+    pricing = groq_json.get("pricing", {})
+
+    brand = _v(desc, "brand") or manufacturer
+    prod_type = _v(desc, "product_type") or ""
+    series = _v(desc, "series") or ""
+    product_name = _v(desc, "product_name") or ""
+
+    # Try to find dimensional values for invoice desc
+    dim = groq_json.get("dimensions", {})
+    diameter_v, diameter_u = _dim(dim, "diameter")
+    width_v, width_u = _dim(dim, "width")
+    length_v, length_u = _dim(dim, "length")
+    qty = _v(pricing, "selling_qty")
+    uom = _v(pricing, "selling_uom")
+
+    size_str = ""
+    if diameter_v: size_str = f"{diameter_v}{diameter_u}"
+    elif width_v and length_v: size_str = f"{width_v}X{length_v}{width_u}"
+
+    # 1. INVOICE DESC: <=40 chars, ALL CAPS, cited values only
+    parts = [p for p in [brand, size_str, prod_type] if p]
+    invoice_raw = " ".join(parts).upper()
+    if qty: invoice_raw += f" {qty}{uom}".upper()
+    invoice_desc = re.sub(r'\s+', ' ', invoice_raw).strip()[:40]
+
+    # 2. MOBILE DESC: 60-80 chars
+    mobile_parts = [p for p in [manufacturer, brand, prod_type, series, mpn] if p]
     mobile_desc = ", ".join(mobile_parts)
-    if len(mobile_desc) < 60:
-        if dim_str: mobile_desc += f", {dim_str}"
-        if material: mobile_desc += f", {material}"
-    if len(mobile_desc) > 80:
-        mobile_desc = mobile_desc[:80].rstrip(', ')
-        
-    size_disp = f"({dim_str})" if dim_str else ""
-    brand_with_r = f"{brand}®" if brand and "®" not in brand else brand
-    short_title = f"{brand_with_r} {series} {mpn} {prod_type} {size_disp}".strip()
-    short_title = re.sub(r'\s+', ' ', short_title)
-    
-    specs = []
-    if prod_type: specs.append(f"Product Type: {prod_type}")
-    if dim_str: specs.append(f"Dimensions: {dim_str}")
-    if material: specs.append(f"Material: {material}")
-    if pkg_qty: specs.append(f"Package Quantity: {pkg_qty}")
-    key_features = attrs.get("key_features") or []
-    if key_features:
-        if isinstance(key_features, list):
-            specs.append(f"Key Features: {', '.join([str(f) for f in key_features if f])}")
-        else:
-            specs.append(f"Key Features: {key_features}")
-    long_desc = ", ".join(specs) + "."
-    
-    retail_desc = meta_desc or f"High performance {brand} {prod_type} designed for professional reliability and long service life."
-    
+    if len(mobile_desc) < 60 and size_str: mobile_desc += f", {size_str}"
+    if len(mobile_desc) > 80: mobile_desc = mobile_desc[:80].rstrip(", ")
+
+    # 3. SHORT DESC
+    size_disp = f"({size_str})" if size_str else ""
+    short_title = re.sub(r'\s+', ' ', f"{brand} {series} {mpn} {prod_type} {size_disp}".strip())
+
+    # 4. LONG DESC: build from raw_attributes
+    spec_parts = []
+    if prod_type: spec_parts.append(f"Product Type: {prod_type}")
+    if size_str: spec_parts.append(f"Size: {size_str}")
+    for attr_key in list(attrs.keys())[:8]:
+        av = _v(attrs, attr_key)
+        if av: spec_parts.append(f"{attr_key}: {av}")
+    features = _vlist(desc, "key_features")
+    if features: spec_parts.append(f"Features: {'; '.join(features[:3])}")
+    long_desc = ", ".join(spec_parts) + "." if spec_parts else ""
+
+    # 5. RETAIL DESC
+    long_text = _v(desc, "long_desc")
+    retail_desc = long_text[:300] if long_text else (
+        f"{brand} {prod_type} {series}".strip() if (brand and prod_type) else ""
+    )
+
     return {
-        "invoice_description": invoice_desc,
-        "mobile_description": mobile_desc,
-        "short_title": short_title,
-        "long_description": long_desc,
-        "retail_description": retail_desc
+        "INVOICE_DESC": invoice_desc,
+        "MOBILE_DESC": mobile_desc,
+        "SHORT_DESC": short_title,
+        "LONG_DESC1": long_desc,
+        "RETAIL_DESC": retail_desc
     }
 
-def format_252_column_delivery_dict(extracted_attrs: Dict[str, Any], raw_text: str, mpn: str) -> Dict[str, Any]:
-    mfr_match = re.search(r'Manufacturer Name:\s*(.+)', raw_text)
-    manufacturer = mfr_match.group(1).strip() if mfr_match else extracted_attrs.get("brand", "Manufacturer")
-    if "(" in manufacturer:
-        manufacturer = manufacturer.split("(")[0].strip()
-        
-    url_match = re.search(r'URL:\s*(https?://[^\s]+)', raw_text)
+# ---------------------------------------------------------
+# 252-Column Mapper
+# ---------------------------------------------------------
+def map_to_252_columns(groq_json: Dict, raw_txt: str, mpn: str) -> Dict[str, Any]:
+    mfr_match = re.search(r'Manufacturer Name:\s*(.+)', raw_txt)
+    manufacturer = mfr_match.group(1).strip() if mfr_match else ""
+
+    url_match = re.search(r'URL:\s*(https?://[^\s]+)', raw_txt)
     mfr_url = url_match.group(1).strip() if url_match else ""
-    
-    desc_match = re.search(r'\*\*Description\*\*:\s*(.+)', raw_text)
-    meta_desc = desc_match.group(1).strip() if desc_match else ""
-    
-    descriptions = generate_5_descriptions(extracted_attrs, mpn, manufacturer, meta_desc)
-    brand = extracted_attrs.get("brand") or manufacturer
-    prod_type = extracted_attrs.get("product_type") or "Tool Accessory"
-    brand_slug = re.sub(r'[^A-Za-z0-9_]', '', (brand or manufacturer).upper().replace(" ", "_"))
-    mpn_slug = re.sub(r'[^A-Za-z0-9_]', '', mpn.upper().replace(" ", "_").replace("-", "_"))
-    prefix = f"{brand_slug}_{mpn_slug}" if brand_slug else mpn_slug
-    
-    delivery_dict = {
+
+    desc = groq_json.get("descriptions", {})
+    ids  = groq_json.get("identifiers", {})
+    dim  = groq_json.get("dimensions", {})
+    docs = groq_json.get("documents", {})
+    imgs = groq_json.get("images", {})
+    attrs = groq_json.get("raw_attributes", {})
+    pricing = groq_json.get("pricing", {})
+
+    brand = _v(desc, "brand") or manufacturer
+    prod_type = _v(desc, "product_type") or ""
+    descriptions = generate_5_descriptions(groq_json, mpn, manufacturer)
+    features = _vlist(desc, "key_features")
+
+    # Dimensions
+    len_v, len_u   = _dim(dim, "length")
+    hgt_v, hgt_u   = _dim(dim, "height")
+    wid_v, wid_u   = _dim(dim, "width")
+    wgt_v, wgt_u   = _dim(dim, "weight")
+    vol_v, vol_u   = _dim(dim, "volume")
+
+    row = {
+        # === Provenance (Col 1-6) ===
         "MFR URL": mfr_url,
         "Ref URL 1": "", "Ref URL 2": "", "Ref URL 3": "", "Ref URL 4": "", "Ref URL 5": "",
+
+        # === Identifiers (Col 7-22) ===
         "PART_NUMBER": mpn,
+        "Dept": "", "Class": "", "Fine": "",
         "SKU - MY_PART_NUMBER": mpn,
         "Mfg_Part_Num": mpn,
         "Part_Desc": f"{brand} {mpn} {prod_type}".strip(),
+        "E1_Brand": brand,
+        "Unilog_Brand": brand,
+        "DIB_Brand": brand,
+        "Part_Manuf": manufacturer,
         "MANUFACTURER_NAME": manufacturer,
-        "BRAND_NAME": f"{brand}®" if brand else "",
+        "BRAND_NAME": brand,
         "TRADE_NAME": brand,
         "MANUFACTURER_PART_NUMBER": mpn,
-        "Classpath": f"Hardware & Tools > Industrial Supplies > {prod_type}s",
-        "INVOICE_DESC": descriptions["invoice_description"],
-        "MOBILE_DESC": descriptions["mobile_description"],
-        "SHORT_DESC": descriptions["short_title"],
-        "LONG_DESC1": descriptions["long_description"],
-        "RETAIL_DESC": descriptions["retail_description"],
-        # Backward compatibility keys
-        "INVOICE_DESCRIPTION": descriptions["invoice_description"],
-        "MOBILE_DESCRIPTION": descriptions["mobile_description"],
-        "SHORT_DESCRIPTION": descriptions["short_title"],
-        "LONG_DESCRIPTION 1": descriptions["long_description"],
-        "RETAIL_DESCRIPTION": descriptions["retail_description"],
-        "Product Name": prod_type,
-        "Product Image": f"{prefix}.jpg",
-        "Alternate Image 1": f"{prefix}_1.jpg",
-        "Alternate Image 2": f"{prefix}_2.jpg",
-        "Alternate Image 3": f"{prefix}_3.jpg",
-        "Alternate Image 4": f"{prefix}_4.jpg",
-        "Specification Sheet": f"{prefix}_Specification_Sheet.pdf",
-        "Actual Image (Yes/No)": "Yes"
-    }
-    
-    features_list = extracted_attrs.get("key_features") or []
-    if isinstance(features_list, str):
-        features_list = [features_list]
-    for i in range(1, 21):
-        feat = features_list[i-1] if i-1 < len(features_list) else ""
-        delivery_dict[f"ITEM_FEATURES_{i}"] = str(feat)
-        delivery_dict[f"ITEM_FEATURES {i}"] = str(feat)
-        
-    attribute_items = []
-    if extracted_attrs.get("width"):
-        v, u = split_value_and_uom(extracted_attrs["width"])
-        attribute_items.append(("Width", v, u))
-    if extracted_attrs.get("length"):
-        v, u = split_value_and_uom(extracted_attrs["length"])
-        attribute_items.append(("Length", v, u))
-    if extracted_attrs.get("material"):
-        attribute_items.append(("Material", extracted_attrs["material"], ""))
-    if extracted_attrs.get("package_quantity"):
-        v, u = split_value_and_uom(extracted_attrs["package_quantity"])
-        attribute_items.append(("Package Quantity", v, u))
-    if extracted_attrs.get("grit"):
-        attribute_items.append(("Grit", extracted_attrs["grit"], ""))
-    if extracted_attrs.get("voltage"):
-        v, u = split_value_and_uom(extracted_attrs["voltage"])
-        attribute_items.append(("Voltage", v, u))
-    if extracted_attrs.get("amperage"):
-        v, u = split_value_and_uom(extracted_attrs["amperage"])
-        attribute_items.append(("Amperage", v, u))
-    if extracted_attrs.get("series"):
-        attribute_items.append(("Series", extracted_attrs["series"], ""))
-    if extracted_attrs.get("product_type"):
-        attribute_items.append(("Product Type", extracted_attrs["product_type"], ""))
-        
-    for i in range(1, 51):
-        if i-1 < len(attribute_items):
-            label, val, uom = attribute_items[i-1]
-            delivery_dict[f"ATTRIBUTE_LABEL {i}"] = label
-            delivery_dict[f"ATTRIBUTE_VALUE {i}"] = str(val)
-            delivery_dict[f"ATTRIBUTE_UOM {i}"] = str(uom)
-        else:
-            delivery_dict[f"ATTRIBUTE_LABEL {i}"] = ""
-            delivery_dict[f"ATTRIBUTE_VALUE {i}"] = ""
-            delivery_dict[f"ATTRIBUTE_UOM {i}"] = ""
-            
-    jw_score = jellyfish.jaro_winkler_similarity(brand.lower(), manufacturer.lower())
-    found_count = len(attribute_items)
-    completeness = min(1.0, found_count / 6.0)
-    delivery_dict["confidence_score"] = round(((jw_score * 0.4) + (completeness * 0.6)) * 100, 2)
-    
-    return delivery_dict
+        "ALTERNATE_PART_NUMBER": "",
 
+        # === Classpath & Descriptions (Col 23-29) ===
+        "Classpath": f"Hardware & Tools > {prod_type}s" if prod_type else "",
+        "MOBILE_DESC": descriptions["MOBILE_DESC"],
+        "INVOICE_DESC": descriptions["INVOICE_DESC"],
+        "SHORT_DESC": descriptions["SHORT_DESC"],
+        "LONG_DESC1": descriptions["LONG_DESC1"],
+        "RETAIL_DESC": descriptions["RETAIL_DESC"],
+        "MARKETING_DESCRIPTION": _v(desc, "long_desc")[:500] if _v(desc, "long_desc") else "",
+
+        # === Fixed spec columns (Col 50-55) ===
+        "With": "",
+        "Standard/Approvals": _v(desc, "standards"),
+        "Prop 65": "",
+        "Application": _v(desc, "application"),
+        "Includes": _v(desc, "includes"),
+        "Product Name": _v(desc, "product_name"),
+    }
+
+    # === Item Features (Col 30-49) — 20 slots ===
+    for i in range(1, 21):
+        row[f"ITEM_FEATURES_{i}"] = features[i-1] if i-1 < len(features) else ""
+
+    # === Dynamic Attribute Triplets (Col 56-205) — 50 slots ===
+    attr_items = []
+    for attr_label, attr_entry in attrs.items():
+        if not isinstance(attr_entry, dict):
+            continue
+        src = attr_entry.get("source", "")
+        val = attr_entry.get("value", "")
+        if src and val:
+            v, u = split_value_uom(str(val))
+            attr_items.append((attr_label, v, u))
+
+    for i in range(1, 51):
+        if i - 1 < len(attr_items):
+            label, val, uom = attr_items[i - 1]
+            row[f"ATTRIBUTE_LABEL {i}"]  = label
+            row[f"ATTRIBUTE_VALUE {i}"] = val
+            row[f"ATTRIBUTE_UOM {i}"]   = uom
+        else:
+            row[f"ATTRIBUTE_LABEL {i}"]  = ""
+            row[f"ATTRIBUTE_VALUE {i}"] = ""
+            row[f"ATTRIBUTE_UOM {i}"]   = ""
+
+    # === Identifiers (Col 206-209) ===
+    row["UPC"]     = _v(ids, "UPC")
+    row["EAN"]     = _v(ids, "EAN")
+    row["GTIN"]    = _v(ids, "GTIN")
+    row["UNSPSC"]  = _v(ids, "UNSPSC")
+
+    # === Pricing & Packaging (Col 210-214) ===
+    row["Warranty"]                   = _v(desc, "warranty")
+    row["List Price"]                 = _v(pricing, "list_price")
+    row["Selling Qty"]                = _v(pricing, "selling_qty")
+    row["Selling UOM"]                = _v(pricing, "selling_uom")
+    row["Standard Packaging Information"] = ""
+
+    # === Dimensions (Col 215-224) ===
+    row["LENGTH"]       = len_v
+    row["LENGTH_UOM"]   = len_u
+    row["HEIGHT"]       = hgt_v
+    row["HEIGHT_UOM"]   = hgt_u
+    row["WIDTH"]        = wid_v
+    row["WIDTH_UOM"]    = wid_u
+    row["WEIGHT"]       = wgt_v
+    row["WEIGHT_UOM"]   = wgt_u
+    row["VOLUME"]       = vol_v
+    row["VOLUME_UOM"]   = vol_u
+
+    # === Images (Col 225-229) ===
+    row["Product Image"]    = _v(imgs, "Product Image")
+    row["Alternate Image 1"] = _v(imgs, "Alternate Image 1")
+    row["Alternate Image 2"] = _v(imgs, "Alternate Image 2")
+    row["Alternate Image 3"] = _v(imgs, "Alternate Image 3")
+    row["Alternate Image 4"] = _v(imgs, "Alternate Image 4")
+
+    # === Documents (Col 230-247) ===
+    row["SDS"]                         = _v(docs, "SDS")
+    row["SDS_1"]                       = ""
+    row["Warranty Information"]        = _v(desc, "warranty")
+    row["Catalog"]                     = _v(docs, "Catalog")
+    row["Specification Sheet"]         = _v(docs, "Specification Sheet")
+    row["Instruction/Installation Manual"] = _v(docs, "Installation Manual")
+    row["Service Manual"]              = _v(docs, "Service Manual")
+    row["Owners/User Manual"]          = _v(docs, "Owners Manual")
+    row["Line Drawing"]                = _v(docs, "Line Drawing")
+    row["MTR"]                         = ""
+    row["RoHS"]                        = ""
+    row["Full Engineering Drawing"]    = ""
+    row["Energy Star Guide"]           = ""
+    row["Technical Bulletin"]          = _v(docs, "Technical Bulletin")
+    row["Submittal"]                   = ""
+    row["Compatibility Chart"]         = ""
+    row["Size Chart"]                  = ""
+    row["Product Label/Insert"]        = ""
+
+    # === Video & Other (Col 248-252) ===
+    row["Video Link"]          = ""
+    row["Video Link 1"]        = ""
+    row["Country Of Origin"]   = _v(desc, "country_of_origin")
+    row["Discontinued"]        = ""
+    row["Actual Image (Yes/No)"] = "Yes" if _v(imgs, "Product Image") else "No"
+
+    # === Confidence Score ===
+    cited_attrs = sum(1 for v in attrs.values() if isinstance(v, dict) and v.get("source"))
+    total_attrs = len(attrs) if attrs else 1
+    has_dims = sum(1 for k in ["length","width","height","weight"] if _dim(dim, k)[0])
+    has_docs = sum(1 for k in docs if _v(docs, k))
+    total_signals = total_attrs + 4 + 4
+    cited_signals = cited_attrs + has_dims + has_docs
+    row["confidence_score"] = round((cited_signals / total_signals) * 100, 2)
+
+    return row
+
+# ---------------------------------------------------------
+# Save clean CSV
+# ---------------------------------------------------------
+def save_clean_csv(delivery_dict: Dict, out_path: str):
+    with open(out_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=list(delivery_dict.keys()))
+        writer.writeheader()
+        writer.writerow(delivery_dict)
+    print(f"[+] Saved clean delivery CSV to {out_path}")
+
+# ---------------------------------------------------------
+# Main Entry Point
+# ---------------------------------------------------------
 def process_scraped_file(filepath: str) -> Dict[str, Any]:
     if not os.path.exists(filepath):
         raise FileNotFoundError(f"File not found: {filepath}")
-        
+
     with open(filepath, "r", encoding="utf-8") as f:
         content = f.read()
-        
-    # Extract MPN from filename
+
     mpn_match = re.search(r'scraped_output_(.+)\.txt', os.path.basename(filepath))
     mpn = mpn_match.group(1) if mpn_match else ""
-    
-    # Extract URL from the text dump
+
     url_match = re.search(r'URL:\s*(https?://[^\s]+)', content)
     product_url = url_match.group(1).strip() if url_match else ""
-    
-    if not product_url:
-        print("[ERROR] Could not find URL in text file to pass to Groq!")
-        return {}
-        
-    print(f"[*] Running Neural Groq Agent Extraction on {product_url}...")
-    extracted_attrs = extract_with_groq(product_url)
-    print(f"[+] Neural Extraction Output:\n{json.dumps(extracted_attrs, indent=2)}")
-    
-    delivery_json = format_252_column_delivery_dict(extracted_attrs, content, mpn)
-    return delivery_json
 
-if __name__ == "__main__":
-    sample_file = os.path.join(os.path.dirname(__file__), "scraped_output_DCB518ASTS06G.txt")
-    if os.path.exists(sample_file):
-        res = process_scraped_file(sample_file)
-        print("\n==========================================")
-        print("=== 252-COLUMN DELIVERY OUTPUT ===")
-        print("==========================================")
-        print(f"1. INVOICE DESC ({len(res['INVOICE_DESCRIPTION'])} chars): {res['INVOICE_DESCRIPTION']}")
-        print(f"2. MOBILE DESC  ({len(res['MOBILE_DESCRIPTION'])} chars): {res['MOBILE_DESCRIPTION']}")
-        print(f"3. SHORT TITLE  : {res['SHORT_DESCRIPTION']}")
-        print(f"4. LONG DESC    : {res['LONG_DESCRIPTION 1']}")
-        print(f"5. Confidence   : {res['confidence_score']}%")
+    # Load PDF text if harvested
+    pdf_txt_path = os.path.join(os.path.dirname(filepath), f"extracted_pdf_{mpn}.txt")
+    pdf_text = ""
+    if os.path.exists(pdf_txt_path):
+        with open(pdf_txt_path, "r", encoding="utf-8") as f:
+            pdf_text = f.read()
+        print(f"[*] Found PDF spec text ({len(pdf_text)} chars) — sending as SOURCE B")
+
+    if not product_url:
+        print("[ERROR] No product URL found in text file.")
+        return {}
+
+    print(f"[*] Running Open-Schema Groq Extraction on {mpn}...")
+    groq_json = extract_with_groq(product_url, pdf_text)
+    print(f"[+] Raw Groq Output:\n{json.dumps(groq_json, indent=2)}")
+
+    delivery_dict = map_to_252_columns(groq_json, content, mpn)
+    return {
+        "provenance": groq_json,
+        "delivery": delivery_dict
+    }
+
+

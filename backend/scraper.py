@@ -111,3 +111,4 @@ async def scrape_product_page(url: str) -> dict:
     else:
         return {"success": False, "markdown": "", "html": html, "reason": "Extracted text was too short"}
 
+

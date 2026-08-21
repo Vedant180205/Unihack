@@ -70,21 +70,51 @@ async def process_row(row):
     print(f"Saved text report to {out_filename_txt}")
     print(f"Saved RAW UNPROCESSED HTML to {out_filename_html}")
 
-    # 4. Phase 3 Neural Extraction (NuExtract GGUF / extractor.py)
-    print(f"\n--- Running Local Neural Extraction ---")
+    # 5. Phase 3 Groq Provenance Extraction
+    print(f"\n--- Running Groq Provenance Extraction ---")
     try:
-        delivery_json = process_scraped_file(out_filename_txt)
+        result = process_scraped_file(out_filename_txt)
         
-        out_filename_json = f"extracted_output_{part_num}.json".replace("/", "_")
-        with open(out_filename_json, 'w', encoding='utf-8') as f:
-            json.dump(delivery_json, f, indent=2)
+        provenance_json = result.get("provenance", {})
+        delivery_dict   = result.get("delivery", {})
+        
+        # Save 1: Full provenance JSON (for dashboard — includes source citations)
+        out_filename_provenance = f"extracted_output_{part_num}.json".replace("/", "_")
+        with open(out_filename_provenance, 'w', encoding='utf-8') as f:
+            json.dump(provenance_json, f, indent=2)
+        print(f"[+] Saved provenance JSON (with citations) to {out_filename_provenance}")
+        
+        # Save 2: Clean delivery CSV (no citations — for delivery)
+        from extractor import save_clean_csv
+        out_filename_csv = f"extracted_output_{part_num}_clean.csv".replace("/", "_")
+        save_clean_csv(delivery_dict, out_filename_csv)
+        
+        # Terminal summary
+        print(f"[+] INVOICE_DESC : {delivery_dict.get('INVOICE_DESC')}")
+        print(f"[+] MOBILE_DESC  : {delivery_dict.get('MOBILE_DESC')}")
+        print(f"[+] SHORT_TITLE  : {delivery_dict.get('SHORT_DESC')}")
+        print(f"[+] Confidence   : {delivery_dict.get('confidence_score')}%")
+        
+        # Citation summary
+        print(f"\n[+] Citation Summary (Fields with verified sources):")
+        total_cited = 0
+        for section_name, section_data in provenance_json.items():
+            if not isinstance(section_data, dict): continue
+            section_cited = {k: v for k, v in section_data.items() if isinstance(v, dict) and v.get("source")}
+            if section_cited:
+                print(f"  [{section_name.upper()}]")
+                for field, entry in section_cited.items():
+                    val_str = str(entry.get('value', ''))
+                    if len(val_str) > 60: val_str = val_str[:57] + "..."
+                    # Safe print for Windows terminals (replaces unsupported characters)
+                    safe_val_str = val_str.encode("ascii", "replace").decode("ascii")
+                    print(f"    {field}: '{safe_val_str}' <- {entry.get('source','').upper()}")
+                total_cited += len(section_cited)
+        print(f"  Total verified fields: {total_cited}")
             
-        print(f"[+] Saved 252-column delivery JSON to {out_filename_json}")
-        print(f"[+] INVOICE_DESC: {delivery_json.get('INVOICE_DESCRIPTION')}")
-        print(f"[+] MOBILE_DESC : {delivery_json.get('MOBILE_DESCRIPTION')}")
-        print(f"[+] SHORT_TITLE : {delivery_json.get('SHORT_DESCRIPTION')}")
-        print(f"[+] Confidence  : {delivery_json.get('confidence_score')}%")
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         print(f"[ERROR] Extraction failed: {e}")
 
 async def run_pipeline(limit=1, skip=0):
@@ -118,6 +148,11 @@ if __name__ == "__main__":
             pass
             
     asyncio.run(run_pipeline(limit=limit, skip=skip))
+
+
+
+
+
 
 
 
