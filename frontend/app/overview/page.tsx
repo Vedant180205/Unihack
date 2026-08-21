@@ -18,17 +18,12 @@ import {
   Download,
   UploadCloud
 } from 'lucide-react'
-import { AppShell, SectionHeading, StatCard } from '@/components/app-shell'
+import { AppShell, SectionHeading, StatCard, useBatch } from '@/components/app-shell'
 import { ExportReportModal } from '@/components/export-report-modal'
-
-const batches = [
-  ['BATCH-24.08.17', 'Industrial MRO master', '18,420', '99.2%', 'Completed'],
-  ['BATCH-24.08.16', 'Electrical components', '12,860', '96.8%', 'Completed'],
-  ['BATCH-24.08.15', 'Facilities & safety', '9,340', '91.4%', 'Review']
-]
 
 export default function OverviewPage() {
   const [exportModalOpen, setExportModalOpen] = useState(false)
+  const { activeBatch, setActiveBatch, batches } = useBatch()
 
   return (
     <AppShell title="Pipeline overview">
@@ -192,38 +187,53 @@ export default function OverviewPage() {
                 </tr>
               </thead>
               <tbody>
-                {batches.map(([batch, source, records, confidence, status]) => (
-                  <tr
-                    key={batch}
-                    onClick={() => setExportModalOpen(true)}
-                    className="border-t border-border hover:bg-accent/20 cursor-pointer"
-                  >
-                    <td className="px-5 py-4 font-mono text-xs text-cyan-300">{batch}</td>
-                    <td className="px-5 py-4">{source}</td>
-                    <td className="px-5 py-4 font-mono text-xs">{records}</td>
-                    <td className="px-5 py-4 font-mono text-xs text-emerald-300">{confidence}</td>
-                    <td className="px-5 py-4">
-                      <span
-                        className={`inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-xs ${
-                          status === 'Review'
-                            ? 'bg-amber-300/10 text-amber-300'
-                            : 'bg-emerald-300/10 text-emerald-300'
-                        }`}
-                      >
-                        <span className="size-1.5 rounded-full bg-current" />
-                        {status}
-                      </span>
-                    </td>
-                    <td className="px-5 py-4 text-right">
-                      <button
-                        aria-label={`Open ${batch}`}
-                        className="rounded p-1 text-muted-foreground hover:bg-accent"
-                      >
-                        <ChevronRight className="size-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {batches.map((batch) => {
+                  const isCurrent = batch.id === activeBatch
+                  return (
+                    <tr
+                      key={batch.id}
+                      onClick={() => {
+                        setActiveBatch(batch.id)
+                        setExportModalOpen(true)
+                      }}
+                      className={`border-t border-border hover:bg-accent/20 cursor-pointer transition-colors ${
+                        isCurrent ? 'bg-cyan-400/5 font-medium' : ''
+                      }`}
+                    >
+                      <td className="px-5 py-4 font-mono text-xs text-cyan-300">
+                        <div className="flex items-center gap-2">
+                          {isCurrent && <span className="size-1.5 rounded-full bg-cyan-400 animate-pulse" />}
+                          {batch.name}
+                        </div>
+                      </td>
+                      <td className="px-5 py-4">{batch.source}</td>
+                      <td className="px-5 py-4 font-mono text-xs">{batch.records}</td>
+                      <td className="px-5 py-4 font-mono text-xs text-emerald-300">{batch.confidence}</td>
+                      <td className="px-5 py-4">
+                        <span
+                          className={`inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-xs ${
+                            batch.status === 'Live'
+                              ? 'bg-cyan-400/15 text-cyan-300 font-semibold'
+                              : batch.status === 'Review'
+                              ? 'bg-amber-300/10 text-amber-300'
+                              : 'bg-emerald-300/10 text-emerald-300'
+                          }`}
+                        >
+                          <span className="size-1.5 rounded-full bg-current" />
+                          {batch.status}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4 text-right">
+                        <button
+                          aria-label={`Open ${batch.name}`}
+                          className="rounded p-1 text-muted-foreground hover:bg-accent"
+                        >
+                          <ChevronRight className="size-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>

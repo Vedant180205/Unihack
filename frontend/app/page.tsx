@@ -23,7 +23,7 @@ import {
   ChevronRight
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { AppShell } from '@/components/app-shell'
+import { AppShell, useBatch } from '@/components/app-shell'
 
 interface UploadedFileState {
   name: string
@@ -35,6 +35,7 @@ interface UploadedFileState {
 
 export default function HomePage() {
   const router = useRouter()
+  const { setActiveBatch } = useBatch()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [dragActive, setDragActive] = useState(false)
   const [selectedFile, setSelectedFile] = useState<UploadedFileState | null>(null)
@@ -115,11 +116,12 @@ export default function HomePage() {
 
     setTimeout(() => {
       setUploadProgress(100)
-      setUploadStage('Dataset loaded! Redirecting to Overview...')
-      toast.success('Dataset successfully ingested! Opening Live Pipeline...')
+      setUploadStage('Dataset loaded! Switching to Batch 1...')
+      setActiveBatch('Batch 1')
+      toast.success('Dataset successfully ingested as Batch 1! Opening Live Pipeline...')
       setTimeout(() => {
-        router.push('/overview')
-      }, 400)
+        router.push('/overview?batch=Batch+1')
+      }, 350)
     }, 1300)
   }
 
@@ -141,7 +143,9 @@ export default function HomePage() {
             <h1 className="text-3xl font-bold tracking-tight sm:text-5xl lg:text-6xl text-foreground leading-[1.12]">
               Transform Raw Feeds into{' '}
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-emerald-300 to-cyan-200">
-                252-Column Enterprise Gold.
+                INTO
+ENTERPRISE-GRADE
+CATALOG DATA.
               </span>
             </h1>
 
@@ -153,8 +157,10 @@ export default function HomePage() {
           {/* Quick Stats Grid */}
           <div className="relative z-10 mt-10 grid grid-cols-2 gap-4 sm:grid-cols-4 pt-8 border-t border-border/60">
             <div className="space-y-1">
-              <p className="font-mono text-2xl sm:text-3xl font-bold text-cyan-300">252</p>
-              <p className="text-xs font-medium text-foreground">Delivery Columns</p>
+              <p className="font-mono text-2xl sm:text-0.5xl font-bold text-cyan-300">STANDARDIZED
+
+</p>
+              <p className="text-xs font-medium text-foreground">CATALOG FIELDS</p>
               <p className="text-[11px] text-muted-foreground">Unilog &amp; DIB compliant</p>
             </div>
             <div className="space-y-1">
