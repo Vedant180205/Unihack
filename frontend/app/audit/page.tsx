@@ -1,6 +1,8 @@
 'use client'
 
 import React, { useState, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import {
   Check,
   CheckCircle2,
@@ -21,10 +23,17 @@ import {
   SlidersHorizontal,
   ArrowRight,
   X,
-  Flame
+  Flame,
+  FileSpreadsheet,
+  Send,
+  Download,
+  PartyPopper,
+  ShieldCheck,
+  Play
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { AppShell, SectionHeading, usePendingQueue, useBatch } from '@/components/app-shell'
+import { ExportReportModal } from '@/components/export-report-modal'
 
 export interface ExceptionItem {
   id: string
@@ -152,6 +161,7 @@ const initialCriticalLowConfidenceItems: ExceptionItem[] = [
 ]
 
 export default function AuditPage() {
+  const router = useRouter()
   const { decrement } = usePendingQueue()
   const { activeBatch } = useBatch()
   const [items, setItems] = useState<ExceptionItem[]>(initialCriticalLowConfidenceItems)
@@ -162,10 +172,15 @@ export default function AuditPage() {
   const [customEditValue, setCustomEditValue] = useState<string>('')
   const [isEditing, setIsEditing] = useState<boolean>(false)
 
+  // Final submission & export modal states
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false)
+  const [isSubmitted, setIsSubmitted] = useState<boolean>(false)
+  const [exportModalOpen, setExportModalOpen] = useState<boolean>(false)
+
   // Strictly filter: confidence < 50% ONLY
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
-      // Must have confidence strictly below 50%
+      // Must have confidence strictly below 50% (or show if resolved)
       if (item.confidence >= 50 && !resolvedIds.has(item.id)) return false
 
       // Category tab filter
@@ -188,7 +203,7 @@ export default function AuditPage() {
     })
   }, [items, activeTab, searchQuery, resolvedIds])
 
-  const handleApplyCorrection = (item: ExceptionItem) => {
+  const handleResolveAndApprove = (item: ExceptionItem) => {
     setResolvedIds((prev) => new Set(prev).add(item.id))
     setItems((prev) =>
       prev.map((i) =>
@@ -203,7 +218,7 @@ export default function AuditPage() {
     )
     setIsEditing(false)
     decrement()
-    toast.success(`Critical exception resolved for SKU #${item.sku} (Confidence boosted to 99%)`)
+    toast.success(`Exception resolved and approved for SKU #${item.sku}`)
   }
 
   const handleApproveAsIs = (item: ExceptionItem) => {
@@ -212,12 +227,31 @@ export default function AuditPage() {
       prev.map((i) => (i.id === item.id ? { ...i, confidence: 95 } : i))
     )
     decrement()
-    toast.success(`SKU #${item.sku} manually approved with domain override`)
+    toast.success(`SKU #${item.sku} approved with domain override`)
+  }
+
+  // Quick Resolve All Helper for testing/demo
+  const handleResolveAll = () => {
+    const allIds = new Set(items.map((i) => i.id))
+    setResolvedIds(allIds)
+    setItems((prev) => prev.map((i) => ({ ...i, confidence: 99, detectedValue: i.suggestedValue })))
+    toast.success(`All ${items.length} critical exceptions have been resolved!`)
   }
 
   const pendingCount = useMemo(() => {
-    return items.filter((i) => i.confidence < 50 && !resolvedIds.has(i.id)).length
+    return items.filter((i) => !resolvedIds.has(i.id)).length
   }, [items, resolvedIds])
+
+  const allResolved = pendingCount === 0
+
+  const handleFinalSubmit = () => {
+    setIsSubmitting(true)
+    setTimeout(() => {
+      setIsSubmitting(false)
+      setIsSubmitted(true)
+      toast.success(`Batch ${activeBatch} successfully finalized and pushed to Master Catalog!`)
+    }, 1200)
+  }
 
   return (
     <AppShell title="HITL audit queue">
@@ -232,56 +266,177 @@ export default function AuditPage() {
               <span className="font-mono text-xs text-muted-foreground">
                 Batch: <strong className="text-cyan-300">{activeBatch}</strong>
               </span>
-              <button
-                onClick={() => {
-                  if (selected) handleApproveAsIs(selected)
-                }}
-                disabled={resolvedIds.has(selected.id)}
-                className="inline-flex items-center gap-2 rounded-md bg-primary text-primary-foreground px-4 py-2.5 text-sm font-semibold hover:opacity-95 shadow-md disabled:opacity-50"
-              >
-                <Check className="size-4" />
-                Approve Item
-              </button>
+
+              {!allResolved ? (
+                <>
+                  <button
+                    onClick={handleResolveAll}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                  >
+                    <CheckCheck className="size-3.5" />
+                    Resolve All ({pendingCount})
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (selected) handleResolveAndApprove(selected)
+                    }}
+                    disabled={resolvedIds.has(selected.id)}
+                    className="inline-flex items-center gap-2 rounded-md bg-primary text-primary-foreground px-4 py-2.5 text-sm font-semibold hover:opacity-95 shadow-md disabled:opacity-50"
+                  >
+                    <Check className="size-4" />
+                    Approve Selected
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={handleFinalSubmit}
+                  disabled={isSubmitting || isSubmitted}
+                  className="inline-flex items-center gap-2 rounded-md bg-gradient-to-r from-emerald-400 to-cyan-400 text-slate-950 px-5 py-2.5 text-sm font-bold shadow-lg hover:scale-105 active:scale-95 transition-all"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <RotateCcw className="size-4 animate-spin" />
+                      Finalizing Batch...
+                    </>
+                  ) : isSubmitted ? (
+                    <>
+                      <CheckCircle2 className="size-4" />
+                      Batch Finalized &amp; Published
+                    </>
+                  ) : (
+                    <>
+                      <Send className="size-4" />
+                      Finalize &amp; Submit Batch →
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           }
         />
 
-        {/* Priority Banner Alert */}
-        <div className="panel p-5 border-rose-500/40 bg-gradient-to-r from-rose-500/15 via-card/90 to-card flex flex-wrap items-center justify-between gap-4 shadow-xl">
-          <div className="flex items-center gap-3.5">
-            <div className="flex size-11 items-center justify-center rounded-xl bg-rose-500/20 text-rose-400 border border-rose-500/30 shadow-inner">
-              <Flame className="size-6 animate-pulse text-rose-400" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-semibold text-sm text-foreground">
-                  {pendingCount} Critical Exceptions Pending Review (Confidence &lt; 50%)
-                </h3>
-                <span className="rounded-full bg-rose-500/20 border border-rose-500/30 px-2.5 py-0.5 font-mono text-[10px] text-rose-300 font-bold">
-                  Threshold: Confidence &lt; 50% Active
-                </span>
+        {/* Priority Banner Alert or All-Resolved Success Hero */}
+        {allResolved ? (
+          <div className="panel p-6 sm:p-8 border-emerald-400/40 bg-gradient-to-r from-emerald-400/15 via-card to-cyan-950/20 rounded-2xl shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-300">
+            <div className="flex flex-wrap items-center justify-between gap-6">
+              <div className="flex items-center gap-4">
+                <div className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-emerald-400/20 text-emerald-300 border border-emerald-400/30 shadow-inner">
+                  <CheckCircle2 className="size-8 animate-bounce text-emerald-400" />
+                </div>
+                <div>
+                  <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-0.5 font-mono text-[10px] text-emerald-300 font-bold uppercase tracking-wider">
+                    <ShieldCheck className="size-3.5" />
+                    All 7 Exceptions Resolved • 100% Quality Score
+                  </div>
+                  <h3 className="text-xl sm:text-2xl font-bold text-foreground mt-1">
+                    All Critical Exceptions Successfully Audited!
+                  </h3>
+                  <p className="text-xs sm:text-sm text-muted-foreground mt-1 max-w-2xl leading-relaxed">
+                    Every record with initial confidence &lt; 50% has been human-verified, normalized to 252 delivery columns, and approved for catalog publishing.
+                  </p>
+                </div>
               </div>
-              <p className="text-xs text-muted-foreground mt-0.5 max-w-xl">
-                Records with confidence ≥ 50% are bypassed or auto-approved. Only severe anomalies (binary corruption, MPN collisions, hybrid threads, counterfeit flags) are surfaced in this queue.
-              </p>
-            </div>
-          </div>
 
-          <div className="flex items-center gap-3 text-xs font-mono">
-            <div className="px-3 py-1.5 rounded-lg border border-rose-500/40 bg-rose-500/10">
-              <span className="text-rose-300">Critical (&lt;30%): </span>
-              <strong className="text-rose-200">
-                {items.filter((i) => i.confidence < 30 && !resolvedIds.has(i.id)).length}
-              </strong>
+              {/* Main Final Submit Action Button */}
+              <div className="flex flex-col sm:items-end gap-2">
+                <button
+                  type="button"
+                  onClick={handleFinalSubmit}
+                  disabled={isSubmitting || isSubmitted}
+                  className={`inline-flex items-center gap-2.5 rounded-xl px-8 py-4 text-base font-bold shadow-2xl transition-all ${
+                    isSubmitted
+                      ? 'bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 cursor-default'
+                      : 'bg-gradient-to-r from-emerald-400 via-cyan-300 to-emerald-400 text-slate-950 hover:scale-105 active:scale-95 hover:shadow-emerald-500/20 shadow-lg'
+                  }`}
+                >
+                  {isSubmitting ? (
+                    <>
+                      <RotateCcw className="size-5 animate-spin" />
+                      Publishing to Catalog...
+                    </>
+                  ) : isSubmitted ? (
+                    <>
+                      <CheckCircle2 className="size-5 text-emerald-400" />
+                      Batch Published Successfully
+                    </>
+                  ) : (
+                    <>
+                      <Send className="size-5 fill-current" />
+                      Final Submit &amp; Publish Batch →
+                    </>
+                  )}
+                </button>
+                <p className="text-[11px] font-mono text-muted-foreground">
+                  {isSubmitted
+                    ? 'Published to Enterprise Catalog and Delivery Output Sync'
+                    : 'Locks resolved state and generates certified output deliverable'}
+                </p>
+              </div>
             </div>
-            <div className="px-3 py-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10">
-              <span className="text-amber-300">Severe (30–49%): </span>
-              <strong className="text-amber-200">
-                {items.filter((i) => i.confidence >= 30 && i.confidence < 50 && !resolvedIds.has(i.id)).length}
-              </strong>
+
+            {/* Post-Submission Actions Bar */}
+            {isSubmitted && (
+              <div className="pt-4 border-t border-border/60 flex flex-wrap items-center justify-between gap-4 animate-in fade-in duration-300">
+                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1.5 text-emerald-400 font-semibold">
+                    <Check className="size-4" /> 252 Columns Verified
+                  </span>
+                  <span>•</span>
+                  <span className="font-mono text-foreground">output.csv &amp; output.xlsx updated</span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setExportModalOpen(true)}
+                    className="inline-flex items-center gap-2 rounded-lg border border-cyan-400/40 bg-cyan-400/10 px-4 py-2 text-xs font-semibold text-cyan-300 hover:bg-cyan-400/20 transition-all hover:scale-[1.02]"
+                  >
+                    <FileSpreadsheet className="size-3.5" />
+                    Download output.csv Deliverable
+                  </button>
+                  <Link
+                    href="/overview"
+                    className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90 transition-opacity"
+                  >
+                    <Play className="size-3.5" />
+                    Return to Pipeline Overview
+                  </Link>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="panel p-5 border-rose-500/40 bg-gradient-to-r from-rose-500/15 via-card/90 to-card flex flex-wrap items-center justify-between gap-4 shadow-xl">
+            <div className="flex items-center gap-3.5">
+              <div className="flex size-11 items-center justify-center rounded-xl bg-rose-500/20 text-rose-400 border border-rose-500/30 shadow-inner">
+                <Flame className="size-6 animate-pulse text-rose-400" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-semibold text-sm text-foreground">
+                    {pendingCount} Critical Exceptions Pending Review (Confidence &lt; 50%)
+                  </h3>
+                  <span className="rounded-full bg-rose-500/20 border border-rose-500/30 px-2.5 py-0.5 font-mono text-[10px] text-rose-300 font-bold">
+                    Threshold: Confidence &lt; 50% Active
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5 max-w-xl">
+                  Resolve all pending items below. Once all exceptions are cleared, the Final Submit button will unlock to publish this batch to the master catalog.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 text-xs font-mono">
+              <div className="px-3 py-1.5 rounded-lg border border-rose-500/40 bg-rose-500/10">
+                <span className="text-rose-300">Remaining: </span>
+                <strong className="text-rose-200">{pendingCount} of {items.length}</strong>
+              </div>
+              <div className="px-3 py-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10">
+                <span className="text-emerald-300">Resolved: </span>
+                <strong className="text-emerald-200">{resolvedIds.size}</strong>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Filter Tabs & Search Bar */}
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -336,7 +491,7 @@ export default function AuditPage() {
                   Critical Queue (&lt; 50%)
                 </p>
                 <p className="text-xs font-medium text-foreground mt-0.5">
-                  {filteredItems.length} records flagged below 50% confidence
+                  {filteredItems.length} records in view ({resolvedIds.size} resolved)
                 </p>
               </div>
               <span className="font-mono text-[10px] text-rose-300 rounded bg-rose-500/15 px-2 py-0.5 border border-rose-500/30 font-bold">
@@ -349,7 +504,7 @@ export default function AuditPage() {
                 <div className="p-8 text-center text-muted-foreground space-y-2">
                   <CheckCircle2 className="size-8 text-emerald-400 mx-auto" />
                   <p className="text-sm font-semibold text-foreground">All critical exceptions resolved!</p>
-                  <p className="text-xs">No records with confidence &lt; 50% remaining.</p>
+                  <p className="text-xs">Ready for Final Submission above.</p>
                 </div>
               ) : (
                 filteredItems.map((item) => {
@@ -407,7 +562,7 @@ export default function AuditPage() {
                               : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
                           }`}
                         >
-                          {item.confidence}%
+                          {isResolved ? '99%' : `${item.confidence}%`}
                         </span>
                         <ChevronRight
                           className={`size-4 text-muted-foreground transition-transform ${
@@ -453,12 +608,12 @@ export default function AuditPage() {
                           : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
                       }`}
                     >
-                      {selected.confidence}% Confidence ({selected.riskLevel} Risk)
+                      {resolvedIds.has(selected.id) ? 'Resolved (99% Conf)' : `${selected.confidence}% Conf (${selected.riskLevel} Risk)`}
                     </span>
                   </div>
                 </div>
 
-                {/* Diff Comparison: Detected vs AI Recommendation */}
+                {/* Diff Comparison: Detected vs Suggested */}
                 <div className="grid gap-4 md:grid-cols-2">
                   {/* Left: Raw Detected Value */}
                   <div className="space-y-2">
@@ -483,9 +638,9 @@ export default function AuditPage() {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-xs">
                       <span className="font-mono text-[11px] text-emerald-300 flex items-center gap-1.5 font-semibold">
-                        <WandSparkles className="size-3.5 text-emerald-400" /> AI Grounded Resolution
+                        <CheckCircle2 className="size-3.5 text-emerald-400" /> Canonical Target Value
                       </span>
-                      <span className="text-[10px] font-mono text-emerald-400 font-bold">99% Confidence Target</span>
+                      <span className="text-[10px] font-mono text-emerald-400 font-bold">252-Col Delivery Schema</span>
                     </div>
 
                     <div className="rounded-xl border border-emerald-400/30 bg-emerald-400/5 p-4 space-y-2 min-h-24">
@@ -508,10 +663,10 @@ export default function AuditPage() {
                   </div>
                 </div>
 
-                {/* AI Rule Rationale Card */}
+                {/* Validation Rule Rationale Card */}
                 <div className="rounded-xl border border-border/80 bg-accent/30 p-4 space-y-2">
                   <div className="flex items-center gap-2 text-xs text-cyan-300 font-mono font-semibold">
-                    <WandSparkles className="size-4" />
+                    <Layers className="size-4" />
                     Validation Rule &amp; Disambiguation Rationale
                   </div>
                   <p className="text-xs text-muted-foreground leading-relaxed">
@@ -548,7 +703,7 @@ export default function AuditPage() {
 
                   <button
                     type="button"
-                    onClick={() => handleApplyCorrection(selected)}
+                    onClick={() => handleResolveAndApprove(selected)}
                     disabled={resolvedIds.has(selected.id)}
                     className="inline-flex items-center gap-2 rounded-lg bg-emerald-400 hover:bg-emerald-300 text-slate-950 px-5 py-2 text-xs font-bold shadow-md transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
                   >
@@ -560,6 +715,12 @@ export default function AuditPage() {
             </section>
           )}
         </div>
+
+        {/* Deliverable Export & Preview Modal */}
+        <ExportReportModal
+          isOpen={exportModalOpen}
+          onClose={() => setExportModalOpen(false)}
+        />
       </div>
     </AppShell>
   )
