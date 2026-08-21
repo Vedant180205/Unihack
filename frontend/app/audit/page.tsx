@@ -234,13 +234,13 @@ export default function AuditPage() {
               </span>
               <button
                 onClick={() => {
-                  if (selected) handleApplyCorrection(selected)
+                  if (selected) handleApproveAsIs(selected)
                 }}
                 disabled={resolvedIds.has(selected.id)}
-                className="inline-flex items-center gap-2 rounded-md bg-gradient-to-r from-rose-500 via-amber-400 to-emerald-400 text-slate-950 px-4 py-2.5 text-sm font-bold hover:opacity-95 shadow-md disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-md bg-primary text-primary-foreground px-4 py-2.5 text-sm font-semibold hover:opacity-95 shadow-md disabled:opacity-50"
               >
-                <WandSparkles className="size-4" />
-                Apply AI Fix to Selected
+                <Check className="size-4" />
+                Approve Item
               </button>
             </div>
           }
@@ -540,7 +540,8 @@ export default function AuditPage() {
                   <button
                     type="button"
                     onClick={() => handleApproveAsIs(selected)}
-                    className="rounded-lg border border-border bg-card px-4 py-2 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                    disabled={resolvedIds.has(selected.id)}
+                    className="rounded-lg border border-border bg-card px-4 py-2 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors disabled:opacity-50"
                   >
                     Approve As-Is
                   </button>
@@ -548,10 +549,11 @@ export default function AuditPage() {
                   <button
                     type="button"
                     onClick={() => handleApplyCorrection(selected)}
-                    className="inline-flex items-center gap-2 rounded-lg bg-emerald-400 hover:bg-emerald-300 text-slate-950 px-5 py-2 text-xs font-bold shadow-md transition-all hover:scale-[1.02] active:scale-[0.98]"
+                    disabled={resolvedIds.has(selected.id)}
+                    className="inline-flex items-center gap-2 rounded-lg bg-emerald-400 hover:bg-emerald-300 text-slate-950 px-5 py-2 text-xs font-bold shadow-md transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
                   >
                     <Check className="size-4" />
-                    {resolvedIds.has(selected.id) ? 'Saved' : 'Apply AI Correction (99% Conf)'}
+                    {resolvedIds.has(selected.id) ? 'Resolved' : isEditing ? 'Save Manual Override' : 'Approve & Resolve'}
                   </button>
                 </div>
               </div>
