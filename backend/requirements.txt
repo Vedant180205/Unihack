@@ -1,6 +1,5 @@
-# Core LLM & Local Neural Inference
-llama-cpp-python>=0.3.0
-huggingface-hub>=0.20.0
+# Core LLM & Neural Inference
+groq>=0.9.0
 
 # Text Similarity & Entity Matching
 jellyfish>=1.0.0
@@ -11,6 +10,9 @@ crawl4ai>=0.3.0
 beautifulsoup4>=4.12.0
 requests>=2.31.0
 httpx>=0.25.0
+pypdf>=4.0.0
+curl_cffi>=0.7.0
+duckduckgo-search>=6.0.0
 
 # Data Processing & Storage
 duckdb>=0.9.0

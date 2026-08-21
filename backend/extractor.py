@@ -1,4 +1,4 @@
-﻿import os
+import os
 import re
 import json
 from fractions import Fraction
@@ -152,7 +152,8 @@ def generate_5_descriptions(attrs: Dict[str, Any], mpn: str, manufacturer: str, 
         mobile_desc = mobile_desc[:80].rstrip(', ')
         
     size_disp = f"({dim_str})" if dim_str else ""
-    short_title = f"{brand}Ar {series} {mpn} {prod_type} {size_disp}".strip()
+    brand_with_r = f"{brand}®" if brand and "®" not in brand else brand
+    short_title = f"{brand_with_r} {series} {mpn} {prod_type} {size_disp}".strip()
     short_title = re.sub(r'\s+', ' ', short_title)
     
     specs = []
@@ -181,7 +182,9 @@ def generate_5_descriptions(attrs: Dict[str, Any], mpn: str, manufacturer: str, 
 def format_252_column_delivery_dict(extracted_attrs: Dict[str, Any], raw_text: str, mpn: str) -> Dict[str, Any]:
     mfr_match = re.search(r'Manufacturer Name:\s*(.+)', raw_text)
     manufacturer = mfr_match.group(1).strip() if mfr_match else extracted_attrs.get("brand", "Manufacturer")
-    
+    if "(" in manufacturer:
+        manufacturer = manufacturer.split("(")[0].strip()
+        
     url_match = re.search(r'URL:\s*(https?://[^\s]+)', raw_text)
     mfr_url = url_match.group(1).strip() if url_match else ""
     
@@ -191,6 +194,9 @@ def format_252_column_delivery_dict(extracted_attrs: Dict[str, Any], raw_text: s
     descriptions = generate_5_descriptions(extracted_attrs, mpn, manufacturer, meta_desc)
     brand = extracted_attrs.get("brand") or manufacturer
     prod_type = extracted_attrs.get("product_type") or "Tool Accessory"
+    brand_slug = re.sub(r'[^A-Za-z0-9_]', '', (brand or manufacturer).upper().replace(" ", "_"))
+    mpn_slug = re.sub(r'[^A-Za-z0-9_]', '', mpn.upper().replace(" ", "_").replace("-", "_"))
+    prefix = f"{brand_slug}_{mpn_slug}" if brand_slug else mpn_slug
     
     delivery_dict = {
         "MFR URL": mfr_url,
@@ -200,21 +206,37 @@ def format_252_column_delivery_dict(extracted_attrs: Dict[str, Any], raw_text: s
         "Mfg_Part_Num": mpn,
         "Part_Desc": f"{brand} {mpn} {prod_type}".strip(),
         "MANUFACTURER_NAME": manufacturer,
-        "BRAND_NAME": f"{brand}Ar",
+        "BRAND_NAME": f"{brand}®" if brand else "",
         "TRADE_NAME": brand,
+        "MANUFACTURER_PART_NUMBER": mpn,
         "Classpath": f"Hardware & Tools > Industrial Supplies > {prod_type}s",
+        "INVOICE_DESC": descriptions["invoice_description"],
+        "MOBILE_DESC": descriptions["mobile_description"],
+        "SHORT_DESC": descriptions["short_title"],
+        "LONG_DESC1": descriptions["long_description"],
+        "RETAIL_DESC": descriptions["retail_description"],
+        # Backward compatibility keys
         "INVOICE_DESCRIPTION": descriptions["invoice_description"],
         "MOBILE_DESCRIPTION": descriptions["mobile_description"],
         "SHORT_DESCRIPTION": descriptions["short_title"],
         "LONG_DESCRIPTION 1": descriptions["long_description"],
         "RETAIL_DESCRIPTION": descriptions["retail_description"],
+        "Product Name": prod_type,
+        "Product Image": f"{prefix}.jpg",
+        "Alternate Image 1": f"{prefix}_1.jpg",
+        "Alternate Image 2": f"{prefix}_2.jpg",
+        "Alternate Image 3": f"{prefix}_3.jpg",
+        "Alternate Image 4": f"{prefix}_4.jpg",
+        "Specification Sheet": f"{prefix}_Specification_Sheet.pdf",
+        "Actual Image (Yes/No)": "Yes"
     }
     
     features_list = extracted_attrs.get("key_features") or []
     if isinstance(features_list, str):
         features_list = [features_list]
-    for i in range(1, 16):
+    for i in range(1, 21):
         feat = features_list[i-1] if i-1 < len(features_list) else ""
+        delivery_dict[f"ITEM_FEATURES_{i}"] = str(feat)
         delivery_dict[f"ITEM_FEATURES {i}"] = str(feat)
         
     attribute_items = []
@@ -242,7 +264,7 @@ def format_252_column_delivery_dict(extracted_attrs: Dict[str, Any], raw_text: s
     if extracted_attrs.get("product_type"):
         attribute_items.append(("Product Type", extracted_attrs["product_type"], ""))
         
-    for i in range(1, 61):
+    for i in range(1, 51):
         if i-1 < len(attribute_items):
             label, val, uom = attribute_items[i-1]
             delivery_dict[f"ATTRIBUTE_LABEL {i}"] = label

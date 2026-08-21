@@ -1,4 +1,148 @@
-import { ArrowUpRight, CheckCircle2, Database, Gauge, Target, Timer } from 'lucide-react'
+'use client'
+
+import { useState } from 'react'
+import { ArrowUpRight, CheckCircle2, Database, Gauge, Target, Timer, FileSpreadsheet } from 'lucide-react'
 import { AppShell, SectionHeading, StatCard } from '@/components/app-shell'
-const rows=[['Material family','94.8%','96.2%','+1.4%','Improved'],['Unit normalization','98.1%','99.4%','+1.3%','Improved'],['Description quality','89.4%','93.8%','+4.4%','Improved'],['Attribute mapping','92.7%','91.9%','-0.8%','Review']]
-export default function Benchmark(){return <AppShell title="Benchmark studio"><div className="mx-auto max-w-[1500px]"><SectionHeading eyebrow="Model performance" title="Benchmark & compare" description="Measure enrichment quality against your approved catalog baseline." action={<button className="inline-flex items-center gap-2 rounded-md border border-border px-4 py-2.5 text-sm hover:bg-accent">Export benchmark <ArrowUpRight className="size-4" /></button>} /><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><StatCard label="Overall accuracy" value="96.2%" detail="+2.8% vs baseline" tone="emerald" /><StatCard label="Precision" value="94.7%" detail="Across 4 attributes" tone="cyan" /><StatCard label="Records tested" value="8,400" detail="Last run · 2 min ago" tone="cyan" /><StatCard label="Avg. latency" value="182ms" detail="Within target range" tone="amber" /></div><div className="mt-6 grid gap-6 xl:grid-cols-[1.3fr_1fr]"><section className="panel overflow-hidden"><div className="border-b border-border p-5"><p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Comparison matrix</p><h3 className="mt-1 font-semibold">Current model vs baseline</h3></div><div className="overflow-x-auto"><table className="w-full min-w-[650px] text-left text-sm"><thead className="bg-accent/30 font-mono text-[10px] uppercase tracking-wider text-muted-foreground"><tr><th className="px-5 py-3">Dimension</th><th className="px-5 py-3">Baseline</th><th className="px-5 py-3">UniClean AI</th><th className="px-5 py-3">Delta</th><th className="px-5 py-3">Status</th></tr></thead><tbody>{rows.map(r=><tr key={r[0]} className="border-t border-border"><td className="px-5 py-4 font-medium">{r[0]}</td><td className="px-5 py-4 font-mono text-xs text-muted-foreground">{r[1]}</td><td className="px-5 py-4 font-mono text-xs text-cyan-300">{r[2]}</td><td className={`px-5 py-4 font-mono text-xs ${r[3].startsWith('-')?'text-amber-300':'text-emerald-300'}`}>{r[3]}</td><td className="px-5 py-4 text-xs">{r[4]}</td></tr>)}</tbody></table></div></section><section className="panel p-5"><SectionHeading eyebrow="Accuracy by dimension" title="Signal quality" /><div className="flex flex-col gap-5">{[['Material family',96],['Unit normalization',99],['Description quality',94],['Attribute mapping',92]].map(([label,value])=><div key={label as string}><div className="mb-2 flex justify-between text-xs"><span>{label}</span><span className="font-mono text-cyan-300">{value}%</span></div><div className="h-2 overflow-hidden rounded-full bg-accent"><div className="h-full rounded-full bg-cyan-300" style={{width:`${value}%`}} /></div></div>)}</div><div className="mt-8 grid grid-cols-3 gap-3 border-t border-border pt-5 text-center"><div><Target className="mx-auto mb-2 size-4 text-emerald-300" /><p className="font-mono text-xs">94.0%</p><p className="text-[10px] text-muted-foreground">Target</p></div><div><Timer className="mx-auto mb-2 size-4 text-cyan-300" /><p className="font-mono text-xs">182ms</p><p className="text-[10px] text-muted-foreground">Latency</p></div><div><Database className="mx-auto mb-2 size-4 text-amber-300" /><p className="font-mono text-xs">4.2x</p><p className="text-[10px] text-muted-foreground">Throughput</p></div></div></section></div><div className="panel mt-6 flex flex-wrap items-center justify-between gap-4 p-5"><div className="flex items-center gap-3"><CheckCircle2 className="size-5 text-emerald-300" /><div><p className="text-sm font-medium">Benchmark run complete</p><p className="text-xs text-muted-foreground">All 8,400 test records evaluated against the latest model.</p></div></div><span className="font-mono text-xs text-muted-foreground">RUN-240817-0924</span></div></div></AppShell>}
+import { ExportReportModal } from '@/components/export-report-modal'
+
+const rows = [
+  ['Material family', '94.8%', '96.2%', '+1.4%', 'Improved'],
+  ['Unit normalization', '98.1%', '99.4%', '+1.3%', 'Improved'],
+  ['Description quality', '89.4%', '93.8%', '+4.4%', 'Improved'],
+  ['Attribute mapping', '92.7%', '91.9%', '-0.8%', 'Review']
+]
+
+export default function Benchmark() {
+  const [exportModalOpen, setExportModalOpen] = useState(false)
+
+  return (
+    <AppShell title="Benchmark studio">
+      <div className="mx-auto max-w-[1500px]">
+        <SectionHeading
+          eyebrow="Model performance"
+          title="Benchmark & compare"
+          description="Measure enrichment quality against your approved catalog baseline."
+          action={
+            <button
+              onClick={() => setExportModalOpen(true)}
+              className="inline-flex items-center gap-2 rounded-md border border-cyan-400/40 bg-cyan-400/10 px-4 py-2.5 text-sm font-medium text-cyan-300 hover:bg-cyan-400/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
+            >
+              <FileSpreadsheet className="size-4" />
+              Export benchmark report
+            </button>
+          }
+        />
+
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard label="Overall accuracy" value="96.2%" detail="+2.8% vs baseline" tone="emerald" />
+          <StatCard label="Precision" value="94.7%" detail="Across 4 attributes" tone="cyan" />
+          <StatCard label="Records tested" value="8,400" detail="Last run · 2 min ago" tone="cyan" />
+          <StatCard label="Avg. latency" value="182ms" detail="Within target range" tone="amber" />
+        </div>
+
+        <div className="mt-6 grid gap-6 xl:grid-cols-[1.3fr_1fr]">
+          <section className="panel overflow-hidden">
+            <div className="border-b border-border p-5">
+              <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                Comparison matrix
+              </p>
+              <h3 className="mt-1 font-semibold">Current model vs baseline</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[650px] text-left text-sm">
+                <thead className="bg-accent/30 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <tr>
+                    <th className="px-5 py-3">Dimension</th>
+                    <th className="px-5 py-3">Baseline</th>
+                    <th className="px-5 py-3">UniClean AI</th>
+                    <th className="px-5 py-3">Delta</th>
+                    <th className="px-5 py-3">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((r) => (
+                    <tr key={r[0]} className="border-t border-border">
+                      <td className="px-5 py-4 font-medium">{r[0]}</td>
+                      <td className="px-5 py-4 font-mono text-xs text-muted-foreground">{r[1]}</td>
+                      <td className="px-5 py-4 font-mono text-xs text-cyan-300">{r[2]}</td>
+                      <td
+                        className={`px-5 py-4 font-mono text-xs ${
+                          r[3].startsWith('-') ? 'text-amber-300' : 'text-emerald-300'
+                        }`}
+                      >
+                        {r[3]}
+                      </td>
+                      <td className="px-5 py-4 text-xs">{r[4]}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="panel p-5">
+            <SectionHeading eyebrow="Accuracy by dimension" title="Signal quality" />
+            <div className="flex flex-col gap-5">
+              {[
+                ['Material family', 96],
+                ['Unit normalization', 99],
+                ['Description quality', 94],
+                ['Attribute mapping', 92]
+              ].map(([label, value]) => (
+                <div key={label as string}>
+                  <div className="mb-2 flex justify-between text-xs">
+                    <span>{label}</span>
+                    <span className="font-mono text-cyan-300">{value}%</span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-accent">
+                    <div
+                      className="h-full rounded-full bg-cyan-300"
+                      style={{ width: `${value}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-8 grid grid-cols-3 gap-3 border-t border-border pt-5 text-center">
+              <div>
+                <Target className="mx-auto mb-2 size-4 text-emerald-300" />
+                <p className="font-mono text-xs">94.0%</p>
+                <p className="text-[10px] text-muted-foreground">Target</p>
+              </div>
+              <div>
+                <Timer className="mx-auto mb-2 size-4 text-cyan-300" />
+                <p className="font-mono text-xs">182ms</p>
+                <p className="text-[10px] text-muted-foreground">Latency</p>
+              </div>
+              <div>
+                <Database className="mx-auto mb-2 size-4 text-amber-300" />
+                <p className="font-mono text-xs">4.2x</p>
+                <p className="text-[10px] text-muted-foreground">Throughput</p>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div className="panel mt-6 flex flex-wrap items-center justify-between gap-4 p-5">
+          <div className="flex items-center gap-3">
+            <CheckCircle2 className="size-5 text-emerald-300" />
+            <div>
+              <p className="text-sm font-medium">Benchmark run complete</p>
+              <p className="text-xs text-muted-foreground">
+                All 8,400 test records evaluated against the latest model.
+              </p>
+            </div>
+          </div>
+          <span className="font-mono text-xs text-muted-foreground">RUN-240817-0924</span>
+        </div>
+
+        <ExportReportModal
+          isOpen={exportModalOpen}
+          onClose={() => setExportModalOpen(false)}
+        />
+      </div>
+    </AppShell>
+  )
+}
+
