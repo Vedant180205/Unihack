@@ -62,8 +62,8 @@ export const usePendingQueue = () => useContext(PendingContext)
 
 const nav = [
   { href: '/', label: 'Home & Upload', icon: UploadCloud },
-  { href: '/overview', label: 'Pipeline Overview', icon: LayoutDashboard },
   { href: '/workbench', label: 'Data Workbench', icon: Database },
+  { href: '/overview', label: 'Pipeline Overview', icon: LayoutDashboard },
   { href: '/audit', label: 'HITL Audit Queue', icon: ClipboardCheck },
   { href: '/benchmark', label: 'Benchmark', icon: Gauge },
 ]

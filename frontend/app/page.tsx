@@ -118,9 +118,9 @@ export default function HomePage() {
       setUploadProgress(100)
       setUploadStage('Dataset loaded! Switching to Batch 1...')
       setActiveBatch('Batch 1')
-      toast.success('Dataset successfully ingested as Batch 1! Opening Live Pipeline...')
+      toast.success('Dataset successfully ingested as Batch 1! Opening Data Workbench...')
       setTimeout(() => {
-        router.push('/overview?batch=Batch+1')
+        router.push('/workbench?batch=Batch+1')
       }, 350)
     }, 1300)
   }
