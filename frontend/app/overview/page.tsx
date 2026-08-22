@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import React, { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
@@ -24,6 +24,7 @@ import {
   Layers
 } from 'lucide-react'
 import { AppShell, SectionHeading, useBatch } from '@/components/app-shell'
+import { api } from '@/lib/api'
 import { ExportReportModal } from '@/components/export-report-modal'
 
 // Smooth ease-out cubic animation function
@@ -63,6 +64,24 @@ export default function OverviewPage() {
   const [exportModalOpen, setExportModalOpen] = useState(false)
   const { activeBatch, setActiveBatch, batches, rowCount } = useBatch()
   const [animationStarted, setAnimationStarted] = useState(false)
+  const [realCount, setRealCount] = useState<number | null>(null)
+  const [realAvgConfidence, setRealAvgConfidence] = useState<number | null>(null)
+
+  // Fetch real pipeline stats from FastAPI on mount
+  useEffect(() => {
+    api.getRecords().then(res => {
+      if (res.success && res.count > 0) {
+        setRealCount(res.count)
+        const scores = res.records
+          .map(r => r.data?.confidence_score ?? r.data?.['confidence_score'])
+          .filter((s): s is number => typeof s === 'number')
+        if (scores.length > 0) {
+          const avg = scores.reduce((a, b) => a + b, 0) / scores.length
+          setRealAvgConfidence(Math.round(avg * 10) / 10)
+        }
+      }
+    }).catch(console.error)
+  }, [])
 
   // Trigger stagger animation on initial mount
   useEffect(() => {
@@ -81,11 +100,11 @@ export default function OverviewPage() {
         if (!isNaN(parsed) && parsed > 0) return parsed
       }
     }
-    return rowCount || 1000
+    return realCount ?? rowCount ?? 1000
   }, [activeBatch, batches, rowCount])
 
   // Dynamically derived numeric targets mapped to N
-  const targetAutoApprovedPct = 96.8
+  const targetAutoApprovedPct = realAvgConfidence ?? 96.8
   const targetAutoApprovedCount = Math.min(N, Math.max(1, Math.round(N * (targetAutoApprovedPct / 100))))
   const targetHumanReviewCount = N <= 10 ? 1 : N <= 25 ? 2 : N <= 50 ? 3 : N <= 100 ? 7 : Math.max(1, Math.round(N * 0.014))
   
@@ -132,7 +151,7 @@ export default function OverviewPage() {
             <div className="flex flex-wrap items-center gap-2 mb-2">
               <span className="inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/5 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-cyan-300">
                 <span className="status-dot cyan" />
-                Live pipeline • Active: {activeBatch}
+                Live pipeline â€¢ Active: {activeBatch}
               </span>
               <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-0.5 font-mono text-[10px] text-emerald-300 font-semibold">
                 Mapped Scope: {N.toLocaleString()} rows
@@ -476,3 +495,4 @@ export default function OverviewPage() {
     </AppShell>
   )
 }
+

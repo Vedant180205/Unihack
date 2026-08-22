@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import React, { useState, useRef } from 'react'
 import Link from 'next/link'
@@ -24,6 +24,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { AppShell, useBatch } from '@/components/app-shell'
+import { api } from '@/lib/api'
 
 interface UploadedFileState {
   name: string
@@ -269,8 +270,8 @@ CATALOG DATA.
                         {selectedFile.name}
                       </p>
                       <p className="text-[11px] text-muted-foreground">
-                        {selectedFile.size} • {selectedFile.type}
-                        {selectedFile.isSample && ' • Verified Benchmark'}
+                        {selectedFile.size} â€¢ {selectedFile.type}
+                        {selectedFile.isSample && ' â€¢ Verified Benchmark'}
                       </p>
                     </div>
                   </div>
@@ -342,7 +343,7 @@ CATALOG DATA.
                 ) : (
                   <>
                     <Play className="size-4 fill-current" />
-                    Upload &amp; Launch Pipeline →
+                    Upload &amp; Launch Pipeline â†’
                   </>
                 )}
               </button>
@@ -389,7 +390,7 @@ CATALOG DATA.
                   <div>
                     <p className="font-semibold text-foreground">5-Tier Description &amp; Attributes</p>
                     <p className="text-muted-foreground mt-0.5">
-                      Synthesizes Invoice (≤40c), Mobile (60–80c), Short, Long, Retail descriptions + 50 attribute pairs.
+                      Synthesizes Invoice (â‰¤40c), Mobile (60â€“80c), Short, Long, Retail descriptions + 50 attribute pairs.
                     </p>
                   </div>
                 </div>
@@ -438,3 +439,4 @@ CATALOG DATA.
     </AppShell>
   )
 }
+

@@ -1,6 +1,6 @@
 ﻿'use client'
 
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -33,6 +33,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { AppShell, SectionHeading, usePendingQueue, useBatch } from '@/components/app-shell'
+import { api } from '@/lib/api'
 import { ExportReportModal } from '@/components/export-report-modal'
 
 export interface ExceptionItem {
@@ -164,8 +165,37 @@ export default function AuditPage() {
   const router = useRouter()
   const { decrement } = usePendingQueue()
   const { activeBatch } = useBatch()
-  const [items, setItems] = useState<ExceptionItem[]>(initialCriticalLowConfidenceItems)
-  const [selected, setSelected] = useState<ExceptionItem>(initialCriticalLowConfidenceItems[0])
+  const [items, setItems] = useState<ExceptionItem[]>([])
+
+  // Load real low-confidence records from FastAPI on mount
+  useEffect(() => {
+    api.getRecords().then(res => {
+      if (res.success && res.records.length > 0) {
+        const exceptions: ExceptionItem[] = res.records
+          .filter(r => {
+            const score = r.data?.confidence_score ?? r.data?.['confidence_score'] ?? 100
+            return score < 85
+          })
+          .map((r, idx) => ({
+            id: r.mpn,
+            sku: r.mpn,
+            productName: r.data?.descriptions?.product_name?.value || r.data?.['Part_Desc'] || r.mpn,
+            confidence: Math.round(r.data?.confidence_score ?? r.data?.['confidence_score'] ?? 70),
+            issueType: 'low_confidence' as const,
+            issueDescription: 'Record confidence below 85% threshold — review required.',
+            recommendedAction: 'Verify key attributes and approve or correct.',
+            ruleExplanation: 'Automated extraction flagged insufficient source citations.',
+            aiSuggestion: 'Approve As-Is',
+            currentValue: r.data?.descriptions?.short_desc?.value || '',
+            sourceUrl: r.data?.['MFR URL'] || '',
+            category: r.data?.['Classpath'] || 'Industrial',
+            brand: r.data?.descriptions?.brand?.value || r.data?.['E1_Brand'] || 'Unknown',
+          }))
+        setItems(exceptions.length > 0 ? exceptions : [])
+      }
+    }).catch(console.error)
+  }, [])
+  const [selected, setSelected] = useState<ExceptionItem | null>(null)
   const [activeTab, setActiveTab] = useState<string>('all')
   const [searchQuery, setSearchQuery] = useState<string>('')
   const [resolvedIds, setResolvedIds] = useState<Set<string>>(new Set())
@@ -725,4 +755,6 @@ export default function AuditPage() {
     </AppShell>
   )
 }
+
+
 

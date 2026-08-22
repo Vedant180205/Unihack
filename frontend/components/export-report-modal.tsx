@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import React, { useState, useEffect, useMemo } from 'react'
 import {
@@ -24,6 +24,7 @@ import {
   ArrowUpDown
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { api } from '@/lib/api'
 
 interface ExportReportModalProps {
   isOpen: boolean
@@ -338,11 +339,11 @@ export function ExportReportModal({ isOpen, onClose }: ExportReportModalProps) {
                             {index + 1}
                           </td>
                           <td className="px-4 py-3 font-mono font-medium text-cyan-300 whitespace-nowrap">
-                            {record.Mfg_Part_Num || record.PART_NUMBER || '—'}
+                            {record.Mfg_Part_Num || record.PART_NUMBER || 'â€”'}
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap">
                             <span className="font-semibold text-foreground">
-                              {record.BRAND_NAME || record.MANUFACTURER_NAME || '—'}
+                              {record.BRAND_NAME || record.MANUFACTURER_NAME || 'â€”'}
                             </span>
                             {record.MANUFACTURER_NAME && record.BRAND_NAME && record.MANUFACTURER_NAME !== record.BRAND_NAME && (
                               <span className="block text-[10px] text-muted-foreground">
@@ -352,10 +353,10 @@ export function ExportReportModal({ isOpen, onClose }: ExportReportModalProps) {
                           </td>
                           <td className="px-4 py-3">
                             <p className="font-medium text-foreground line-clamp-1">
-                              {record.SHORT_DESC || record.Part_Desc || record['Product Name'] || '—'}
+                              {record.SHORT_DESC || record.Part_Desc || record['Product Name'] || 'â€”'}
                             </p>
                             <p className="text-[10px] font-mono text-muted-foreground line-clamp-1">
-                              {record.Classpath || '—'}
+                              {record.Classpath || 'â€”'}
                             </p>
                           </td>
                           {displayedColumns
@@ -391,7 +392,7 @@ export function ExportReportModal({ isOpen, onClose }: ExportReportModalProps) {
                                     record[col]
                                   )
                                 ) : (
-                                  <span className="text-muted-foreground/40">—</span>
+                                  <span className="text-muted-foreground/40">â€”</span>
                                 )}
                               </td>
                             ))}
@@ -485,7 +486,7 @@ export function ExportReportModal({ isOpen, onClose }: ExportReportModalProps) {
                   {selectedRecord.INVOICE_DESC && (
                     <div>
                       <div className="flex items-center justify-between text-[11px] text-muted-foreground mb-1">
-                        <span>Invoice Desc (≤40 chars)</span>
+                        <span>Invoice Desc (â‰¤40 chars)</span>
                         <span className="font-mono text-[10px] text-cyan-300">{selectedRecord.INVOICE_DESC.length}c</span>
                       </div>
                       <p className="font-mono font-medium text-cyan-300 bg-card p-2 rounded-md border border-border/50 text-[11px]">
@@ -498,7 +499,7 @@ export function ExportReportModal({ isOpen, onClose }: ExportReportModalProps) {
                   {selectedRecord.MOBILE_DESC && (
                     <div>
                       <div className="flex items-center justify-between text-[11px] text-muted-foreground mb-1">
-                        <span>Mobile App Desc (60–80 chars)</span>
+                        <span>Mobile App Desc (60â€“80 chars)</span>
                         <span className="font-mono text-[10px] text-cyan-300">{selectedRecord.MOBILE_DESC.length}c</span>
                       </div>
                       <p className="text-foreground bg-card p-2 rounded-md border border-border/50 text-[11px]">
@@ -605,3 +606,4 @@ export function ExportReportModal({ isOpen, onClose }: ExportReportModalProps) {
     </div>
   )
 }
+

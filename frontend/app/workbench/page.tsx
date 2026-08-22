@@ -24,6 +24,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { AppShell, SectionHeading, usePendingQueue, useBatch } from '@/components/app-shell'
+import { api, type ProductRecord } from '@/lib/api'
 import { ExportReportModal } from '@/components/export-report-modal'
 
 export type Item = {
@@ -213,8 +214,8 @@ export default function Workbench() {
     const q = query.toLowerCase()
     return slicedItems.filter(
       (i) =>
-        i.sku.toLowerCase().includes(q) ||
-        i.name.toLowerCase().includes(q) ||
+        i?.sku.toLowerCase().includes(q) ||
+        i?.name.toLowerCase().includes(q) ||
         i.category.toLowerCase().includes(q) ||
         (i.brand || '').toLowerCase().includes(q)
     )
@@ -472,9 +473,9 @@ export default function Workbench() {
                 <tbody>
                   {filtered.map((item, idx) => (
                     <tr
-                      key={item.sku}
+                      key={item?.sku}
                       className={`cursor-pointer border-t border-border transition-colors hover:bg-accent/30 ${
-                        selected?.sku === item.sku ? 'bg-cyan-300/5 font-medium' : ''
+                        selected?.sku === item?.sku ? 'bg-cyan-300/5 font-medium' : ''
                       }`}
                       onClick={() => {
                         setSelected(item)
@@ -483,10 +484,10 @@ export default function Workbench() {
                     >
                       <td className="px-4 py-4 font-mono text-xs text-muted-foreground">{idx + 1}</td>
                       <td className="px-4 py-4 font-mono text-xs text-cyan-300 font-medium whitespace-nowrap">
-                        #{item.sku}
+                        #{item?.sku}
                       </td>
                       <td className="px-4 py-4 font-medium text-foreground">
-                        <div className="line-clamp-1">{item.name}</div>
+                        <div className="line-clamp-1">{item?.name}</div>
                         {item.brand && (
                           <span className="text-[10px] font-mono text-muted-foreground">{item.brand}</span>
                         )}
@@ -628,7 +629,7 @@ function Inspector({
         <div>
           <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-cyan-300">Diff inspector</p>
           <h3 className="mt-1 font-semibold text-foreground">
-            #{item.sku} Â· {item.name}
+            #{item?.sku} Â· {item?.name}
           </h3>
         </div>
         {compact && (
@@ -693,6 +694,7 @@ function Inspector({
     </aside>
   )
 }
+
 
 
 
