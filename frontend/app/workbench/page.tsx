@@ -211,20 +211,23 @@ export default function Workbench() {
                       <th className="px-4 py-3 font-medium uppercase tracking-wider">SKU / MPN</th>
                       <th className="px-4 py-3 font-medium uppercase tracking-wider">Manufacturer</th>
                       <th className="px-4 py-3 font-medium uppercase tracking-wider">Description</th>
+                      <th className="px-4 py-3 font-medium uppercase tracking-wider">E1 Brand</th>
+                      <th className="px-4 py-3 font-medium uppercase tracking-wider">Unilog Brand</th>
+                      <th className="px-4 py-3 font-medium uppercase tracking-wider">DIB Brand</th>
                       <th className="px-4 py-3"></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/50">
                     {isLoading ? (
                       <tr>
-                        <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
+                        <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">
                           <RefreshCw className="size-5 animate-spin mx-auto mb-2" />
                           Loading CSV data...
                         </td>
                       </tr>
                     ) : filtered.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
+                        <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">
                           No matching records found.
                         </td>
                       </tr>
@@ -256,6 +259,15 @@ export default function Workbench() {
                             </td>
                             <td className="px-4 py-4 text-xs text-muted-foreground truncate max-w-[300px]">
                               {desc}
+                            </td>
+                            <td className="px-4 py-4 text-xs text-muted-foreground truncate max-w-[150px]">
+                              {item['E1_Brand'] || '-'}
+                            </td>
+                            <td className="px-4 py-4 text-xs text-muted-foreground truncate max-w-[150px]">
+                              {item['Unilog_Brand'] || '-'}
+                            </td>
+                            <td className="px-4 py-4 text-xs text-muted-foreground truncate max-w-[150px]">
+                              {item['DIB_Brand'] || '-'}
                             </td>
                             <td className="px-4 py-4 text-right">
                               <ArrowRight className="size-4 text-muted-foreground ml-auto" />
@@ -442,4 +454,5 @@ function Inspector({
     </aside>
   )
 }
+
 
