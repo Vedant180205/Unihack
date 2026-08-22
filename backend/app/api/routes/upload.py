@@ -33,3 +33,37 @@ async def upload_csv(file: UploadFile = File(...)):
         saved_path=str(dest),
         row_count=row_count
     )
+
+@router.get("/csv/preview")
+async def csv_preview(path: str = None, page: int = 1, limit: int = 50):
+    if not path or not Path(path).exists():
+        # Fallback to default input
+        from app.core.config import DEFAULT_INPUT_CSV
+        path = str(DEFAULT_INPUT_CSV)
+        if not Path(path).exists():
+            raise HTTPException(status_code=404, detail="No CSV found to preview")
+
+    try:
+        with open(path, "r", encoding="utf-8-sig") as f:
+            reader = csv.DictReader(f)
+            # We can't jump directly in a CSV stream easily, so we iterate
+            rows = []
+            total_rows = 0
+            start_idx = (page - 1) * limit
+            end_idx = start_idx + limit
+            
+            for i, row in enumerate(reader):
+                total_rows += 1
+                if start_idx <= i < end_idx:
+                    rows.append(row)
+                    
+        return {
+            "success": True,
+            "page": page,
+            "limit": limit,
+            "total_rows": total_rows,
+            "total_pages": (total_rows + limit - 1) // limit,
+            "rows": rows
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
