@@ -343,7 +343,8 @@ CATALOG DATA.
                 ) : (
                   <>
                     <Play className="size-4 fill-current" />
-                    Upload &amp; Launch Pipeline â†’
+                    Upload &amp; Launch Pipeline &rarr;
+→
                   </>
                 )}
               </button>
@@ -439,4 +440,6 @@ CATALOG DATA.
     </AppShell>
   )
 }
+
+
 
