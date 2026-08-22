@@ -184,6 +184,23 @@ export default function Workbench() {
                     {totalRows} records
                   </h3>
                 </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">Rows per page:</span>
+                  <select
+                    value={limit}
+                    onChange={(e) => {
+                      setLimit(Number(e.target.value))
+                      setPage(1)
+                    }}
+                    className="rounded-md border border-border bg-background/50 px-2 py-1 text-xs text-foreground focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                  >
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                    <option value={500}>500</option>
+                  </select>
+                </div>
               </div>
 
               <div className="flex-1 overflow-auto">
@@ -425,3 +442,4 @@ function Inspector({
     </aside>
   )
 }
+
