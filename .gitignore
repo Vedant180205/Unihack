@@ -52,3 +52,10 @@ models/
 *.gguf
 scraped_output_*
 extracted_output_*
+
+# FastAPI output and uploads
+backend/output/*
+!backend/output/.gitkeep
+backend/uploads/*
+!backend/uploads/.gitkeep
+
