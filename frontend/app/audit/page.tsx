@@ -130,10 +130,16 @@ export default function AuditPage() {
     }).sort((a, b) => b.pendingCount - a.pendingCount)
   }, [items, resolvedIds, searchQuery])
 
-  // When products load, select the first one automatically
+  // When products load, select the first one automatically or use the query param
   useEffect(() => {
-    if (!selectedSku && products.length > 0) {
-      setSelectedSku(products[0].sku)
+    if (products.length > 0) {
+      const params = new URLSearchParams(window.location.search)
+      const skuParam = params.get('sku')
+      if (skuParam && products.some(p => p.sku === skuParam)) {
+        setSelectedSku(skuParam)
+      } else if (!selectedSku) {
+        setSelectedSku(products[0].sku)
+      }
     }
   }, [products, selectedSku])
 

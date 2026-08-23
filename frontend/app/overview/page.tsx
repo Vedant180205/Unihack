@@ -178,7 +178,7 @@ export default function OverviewPage() {
                           )}
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <Link href={`/results/${safeMpn}`} className="inline-flex rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground">
+                          <Link href={`/audit?sku=${safeMpn}`} className="inline-flex rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground">
                             <ChevronRight className="size-4" />
                           </Link>
                         </td>
