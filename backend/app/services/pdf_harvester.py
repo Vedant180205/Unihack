@@ -45,7 +45,9 @@ def harvest_pdf_links(html_content: str, base_url: str) -> List[str]:
     soup = BeautifulSoup(html_content, "html.parser")
     found = []
     for a_tag in soup.find_all("a", href=True):
-        href = a_tag["href"].strip()
+        href = a_tag.get("href")
+        if not href: continue
+        href = href.strip()
         link_text = a_tag.get_text(strip=True).lower()
         absolute_url = urljoin(base_url, href)
         is_pdf_url = absolute_url.lower().endswith(".pdf")

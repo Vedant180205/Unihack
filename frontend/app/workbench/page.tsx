@@ -38,12 +38,11 @@ export default function Workbench() {
   const [items, setItems] = useState<Item[]>([])
   const [selected, setSelected] = useState<Item | null>(null)
   const [query, setQuery] = useState('')
-  const [inspector, setInspector] = useState(false)
   const [exportModalOpen, setExportModalOpen] = useState(false)
 
   // Pagination states
   const [page, setPage] = useState(1)
-  const [limit, setLimit] = useState(50)
+  const [limit, setLimit] = useState(10)
   const [totalRows, setTotalRows] = useState(0)
   const [totalPages, setTotalPages] = useState(1)
   const [isLoading, setIsLoading] = useState(true)
@@ -51,6 +50,7 @@ export default function Workbench() {
   // Launch pipeline action states
   const [isLaunching, setIsLaunching] = useState(false)
   const [launchProgress, setLaunchProgress] = useState(0)
+  const [pipelineLimit, setPipelineLimit] = useState<number | 'all'>('all')
   const [launchStage, setLaunchStage] = useState('')
 
   // Fetch real records from FastAPI on mount & page change
@@ -90,15 +90,17 @@ export default function Workbench() {
   }, [items, query])
 
   const handleLaunchPipeline = async () => {
+    const limitToProcess = pipelineLimit === 'all' ? totalRows : Math.min(pipelineLimit, totalRows)
+    
     setIsLaunching(true)
     setLaunchProgress(10)
-    setLaunchStage(`Starting pipeline for all records...`)
+    setLaunchStage(`Starting pipeline for ${limitToProcess} records...`)
 
     try {
       let inputPath: string | undefined
       try { inputPath = localStorage.getItem('uniclean_input_path') || undefined } catch {}
 
-      const job = await api.runPipeline({ input_path: inputPath, limit: totalRows, skip: 0 })
+      const job = await api.runPipeline({ input_path: inputPath, limit: limitToProcess, skip: 0 })
       setLaunchProgress(20)
       setLaunchStage(`Job ${job.job_id} launched — enriching records...`)
 
@@ -204,30 +206,29 @@ export default function Workbench() {
               </div>
 
               <div className="flex-1 overflow-auto">
-                <table className="w-full text-left text-sm whitespace-nowrap">
+                <table className="w-full text-left text-sm table-fixed">
                   <thead className="bg-background/80 text-xs text-muted-foreground sticky top-0 z-10 backdrop-blur-md">
                     <tr>
-                      <th className="px-4 py-3 font-medium uppercase tracking-wider w-12">#</th>
-                      <th className="px-4 py-3 font-medium uppercase tracking-wider">SKU / MPN</th>
-                      <th className="px-4 py-3 font-medium uppercase tracking-wider">Manufacturer</th>
-                      <th className="px-4 py-3 font-medium uppercase tracking-wider">Description</th>
-                      <th className="px-4 py-3 font-medium uppercase tracking-wider">E1 Brand</th>
-                      <th className="px-4 py-3 font-medium uppercase tracking-wider">Unilog Brand</th>
-                      <th className="px-4 py-3 font-medium uppercase tracking-wider">DIB Brand</th>
-                      <th className="px-4 py-3"></th>
+                      <th className="px-3 py-3 font-medium uppercase tracking-wider w-[5%] truncate">#</th>
+                      <th className="px-3 py-3 font-medium uppercase tracking-wider w-[16%] truncate">SKU / MPN</th>
+                      <th className="px-3 py-3 font-medium uppercase tracking-wider w-[18%] truncate">Manufacturer</th>
+                      <th className="px-3 py-3 font-medium uppercase tracking-wider w-[25%] truncate">Description</th>
+                      <th className="px-3 py-3 font-medium uppercase tracking-wider w-[12%] truncate">E1 Brand</th>
+                      <th className="px-3 py-3 font-medium uppercase tracking-wider w-[12%] truncate">Unilog Brand</th>
+                      <th className="px-3 py-3 font-medium uppercase tracking-wider w-[12%] truncate">DIB Brand</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/50">
                     {isLoading ? (
                       <tr>
-                        <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">
+                        <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
                           <RefreshCw className="size-5 animate-spin mx-auto mb-2" />
                           Loading CSV data...
                         </td>
                       </tr>
                     ) : filtered.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">
+                        <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
                           No matching records found.
                         </td>
                       </tr>
@@ -242,35 +243,32 @@ export default function Workbench() {
                             key={i}
                             onClick={() => {
                               setSelected(item)
-                              setInspector(true)
+                              
                             }}
                             className={`group cursor-pointer transition-colors hover:bg-accent/40 ${
                               selected === item ? 'bg-accent/60' : ''
                             }`}
                           >
-                            <td className="px-4 py-4 font-mono text-[11px] text-muted-foreground">
+                            <td className="px-3 py-4 font-mono text-[11px] text-muted-foreground truncate">
                               {(page - 1) * limit + i + 1}
                             </td>
-                            <td className="px-4 py-4 font-mono text-cyan-300 font-medium">
+                            <td className="px-3 py-4 font-mono text-cyan-300 font-medium truncate">
                               {mpn}
                             </td>
-                            <td className="px-4 py-4 font-medium text-foreground">
+                            <td className="px-3 py-4 font-medium text-foreground truncate">
                               {mfr}
                             </td>
-                            <td className="px-4 py-4 text-xs text-muted-foreground truncate max-w-[300px]">
+                            <td className="px-3 py-4 text-xs text-muted-foreground truncate">
                               {desc}
                             </td>
-                            <td className="px-4 py-4 text-xs text-muted-foreground truncate max-w-[150px]">
+                            <td className="px-3 py-4 text-xs text-muted-foreground truncate">
                               {item['E1_Brand'] || '-'}
                             </td>
-                            <td className="px-4 py-4 text-xs text-muted-foreground truncate max-w-[150px]">
+                            <td className="px-3 py-4 text-xs text-muted-foreground truncate">
                               {item['Unilog_Brand'] || '-'}
                             </td>
-                            <td className="px-4 py-4 text-xs text-muted-foreground truncate max-w-[150px]">
+                            <td className="px-3 py-4 text-xs text-muted-foreground truncate">
                               {item['DIB_Brand'] || '-'}
-                            </td>
-                            <td className="px-4 py-4 text-right">
-                              <ArrowRight className="size-4 text-muted-foreground ml-auto" />
                             </td>
                           </tr>
                         )
@@ -306,57 +304,91 @@ export default function Workbench() {
             </div>
           </section>
 
-          {selected && (
-            <Inspector
-              item={selected}
-              approve={approve}
-              close={() => setInspector(false)}
-              compact={inspector}
-            />
+          {selected ? (
+            <Inspector item={selected} approve={approve} />
+          ) : (
+            <aside className="panel p-5 w-full lg:w-[450px] shrink-0 flex flex-col min-h-[600px] items-center justify-center text-muted-foreground border border-border/50 bg-background/30 backdrop-blur-md">
+              <Layers className="size-8 mb-3 opacity-20" />
+              <p className="text-sm">Select a row to inspect</p>
+            </aside>
           )}
         </div>
 
         {/* Bottom Banner: Launch Pipeline Action Card */}
-        <div className="panel p-6 sm:p-8 bg-gradient-to-r from-card via-card/95 to-cyan-950/20 border border-cyan-400/30 rounded-2xl shadow-xl space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-6">
-            <div className="space-y-1.5 max-w-xl">
-              <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3 py-0.5 text-xs font-medium text-cyan-300 font-mono tracking-wider uppercase">
-                <Sparkles className="size-3.5 animate-pulse" />
-                Batch Execution Scope: {totalRows} Records
+        <div className="panel p-6 sm:p-8 bg-gradient-to-r from-card via-card/95 to-cyan-950/20 border border-cyan-400/30 rounded-2xl shadow-xl space-y-4 relative overflow-hidden">
+          {/* Subtle glow effect */}
+          <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+          
+          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-8 relative z-10">
+            <div className="space-y-4 max-w-xl">
+              <div>
+                <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3 py-0.5 mb-3 text-xs font-medium text-cyan-300 font-mono tracking-wider uppercase">
+                  <Sparkles className="size-3.5 animate-pulse" />
+                  Execution Scope
+                </div>
+                <h3 className="text-2xl font-bold tracking-tight text-foreground">
+                  Ready to Execute Autonomous Enrichment?
+                </h3>
+                <p className="text-sm text-muted-foreground leading-relaxed mt-1">
+                  Launch web crawlers, spec sheet PDF ingestion, neural attribute synthesis, and 252-column normalization for this dataset batch.
+                </p>
               </div>
-              <h3 className="text-xl font-bold tracking-tight text-foreground">
-                Ready to Execute Autonomous Enrichment Pipeline?
-              </h3>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                Launch web crawlers, spec sheet PDF ingestion, neural attribute synthesis, and 252-column normalization for this dataset batch.
-              </p>
+
+              {/* Prominent Custom Row Selector */}
+              <div className="flex items-center gap-4 p-4 rounded-xl bg-background/60 border border-cyan-500/30 shadow-inner max-w-md">
+                <div className="flex-1">
+                  <label className="text-sm font-bold text-cyan-300 block mb-1">Items to Process</label>
+                  <p className="text-xs text-muted-foreground">Select or type custom number</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={1}
+                    max={totalRows}
+                    value={pipelineLimit === 'all' ? totalRows : pipelineLimit}
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      if (val > totalRows) setPipelineLimit('all');
+                      else setPipelineLimit(val);
+                    }}
+                    disabled={isLaunching}
+                    className="w-24 rounded-lg border-2 border-cyan-500/50 bg-background px-3 py-2 text-base text-foreground font-mono font-bold focus:border-cyan-400 focus:outline-none focus:ring-4 focus:ring-cyan-500/20 text-center"
+                  />
+                  <button
+                    onClick={() => setPipelineLimit('all')}
+                    className="text-xs font-semibold text-cyan-950 bg-cyan-400 hover:bg-cyan-300 rounded-lg px-3 py-2.5 transition-colors shadow-sm"
+                  >
+                    Max ({totalRows})
+                  </button>
+                </div>
+              </div>
             </div>
 
             {/* Launch Action Button */}
-            <div className="flex flex-col sm:items-end gap-2">
+            <div className="flex flex-col items-start lg:items-end gap-3 w-full lg:w-auto">
               <button
                 type="button"
                 onClick={handleLaunchPipeline}
                 disabled={isLaunching || totalRows === 0}
-                className={`inline-flex items-center gap-2 rounded-xl px-7 py-3.5 text-sm font-semibold shadow-xl transition-all ${
+                className={`inline-flex items-center gap-3 rounded-2xl px-8 py-5 text-base font-bold shadow-xl transition-all w-full justify-center lg:w-auto ${
                   !isLaunching && totalRows > 0
-                    ? 'bg-gradient-to-r from-cyan-400 to-emerald-400 text-slate-950 hover:opacity-95 hover:scale-[1.02] active:scale-[0.98]'
+                    ? 'bg-gradient-to-r from-cyan-400 to-emerald-400 text-slate-950 hover:opacity-95 hover:scale-[1.02] active:scale-[0.98] ring-4 ring-cyan-400/20'
                     : 'bg-muted text-muted-foreground cursor-not-allowed opacity-60'
                 }`}
               >
                 {isLaunching ? (
                   <>
-                    <RotateCcw className="size-4 animate-spin" />
+                    <RotateCcw className="size-5 animate-spin" />
                     Launching Pipeline...
                   </>
                 ) : (
                   <>
-                    <Play className="size-4 fill-current" />
-                    Launch Pipeline for {totalRows} Items &rarr;
+                    <Play className="size-5 fill-current" />
+                    Launch for {pipelineLimit === 'all' ? totalRows : Math.min(pipelineLimit, totalRows)} Items
                   </>
                 )}
               </button>
-              <p className="text-[11px] text-muted-foreground font-mono">
+              <p className="text-xs text-muted-foreground font-mono text-center lg:text-right w-full">
                 Redirects to Live Telemetry &amp; Pipeline Overview
               </p>
             </div>
@@ -394,47 +426,32 @@ export default function Workbench() {
 function Inspector({
   item,
   approve,
-  close,
-  compact,
 }: {
   item: Item
   approve: () => void
-  close: () => void
-  compact: boolean
 }) {
   const mpn = item['Mfg_Part_Num'] || item['PART_NUMBER'] || 'N/A'
   
   return (
-    <aside
-      className={`${
-        compact
-          ? 'compact-inspector fixed inset-x-3 bottom-3 z-30 max-h-[78vh] overflow-auto shadow-2xl'
-          : 'wide-inspector'
-      } panel p-5`}
-    >
-      <div className="mb-5 flex items-start justify-between">
+    <aside className="panel p-5 w-full lg:w-[450px] shrink-0 flex flex-col max-h-[700px] border border-border/50 bg-background/30 backdrop-blur-md">
+      <div className="mb-5 flex items-start justify-between shrink-0">
         <div>
           <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-cyan-300">Raw CSV Inspector</p>
           <h3 className="mt-1 font-semibold text-foreground">
             {mpn}
           </h3>
         </div>
-        {compact && (
-          <button aria-label="Close inspector" onClick={close} className="rounded p-1 hover:bg-accent">
-            <X className="size-4" />
-          </button>
-        )}
       </div>
 
-      <div className="flex flex-col gap-2 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+      <div className="flex flex-col gap-2 flex-1 overflow-y-auto pr-2 custom-scrollbar">
         {Object.entries(item).map(([key, value]) => {
           if (!value) return null
           return (
-            <div key={key} className="rounded-md border border-border/50 bg-background/30 p-2.5">
+            <div key={key} className="rounded-md border border-border/50 bg-background/50 p-2.5">
               <p className="mb-1 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
                 {key}
               </p>
-              <div className="text-xs font-mono text-cyan-200/90 break-words">
+              <div className="text-xs font-mono text-cyan-200/90 break-words whitespace-pre-wrap">
                 {value}
               </div>
             </div>
@@ -442,17 +459,16 @@ function Inspector({
         })}
       </div>
 
-      <div className="mt-5 flex gap-2">
-        <button
-          onClick={approve}
-          className="flex flex-1 items-center justify-center gap-2 rounded-md bg-emerald-400 px-3 py-2.5 text-sm font-medium text-emerald-950 hover:bg-emerald-300 transition-colors shadow-sm"
-        >
-          <CheckCircle2 className="size-4" />
-          Approve Raw Input
-        </button>
-      </div>
     </aside>
   )
 }
+
+
+
+
+
+
+
+
 
 

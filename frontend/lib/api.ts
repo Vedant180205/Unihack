@@ -1,4 +1,4 @@
-﻿/**
+/**
  * api.ts — Typed API client for FastAPI backend (http://localhost:8000)
  * All backend calls go through here. Change BASE_URL for deployment.
  */
@@ -74,6 +74,23 @@ export interface CsvPreviewResponse {
 
 // ─── API Client ───────────────────────────────────────────────────────────────
 
+export interface PipelineResultItem {
+  mpn: string
+  domain: string
+  domain_link: string
+  product_link: string
+  product_name: string
+  manufacturer: string
+}
+
+export interface PipelineResultsResponse {
+  results: PipelineResultItem[]
+}
+
+export interface PipelineResultDetailResponse {
+  data: Record<string, string>
+}
+
 export const api = {
 
   /** Fetch paginated raw CSV rows. */
@@ -144,5 +161,34 @@ export const api = {
       return false
     }
   },
+  // Results API
+  async getPipelineResults(): Promise<PipelineResultsResponse> {
+    const res = await fetch(`${BASE_URL}/api/pipeline/results`)
+    if (!res.ok) throw new Error('Failed to fetch pipeline results')
+    return res.json()
+  },
+
+  async getProductDetails(mpn: string): Promise<PipelineResultDetailResponse> {
+    const res = await fetch(`${BASE_URL}/api/pipeline/results/${encodeURIComponent(mpn)}`)
+    if (!res.ok) throw new Error(`Failed to fetch product details for ${mpn}`)
+    return res.json()
+  },
+
+  async getConfidence(mpn: string): Promise<{ confidence: Record<string, number> }> {
+    const res = await fetch(`${BASE_URL}/api/pipeline/confidence/${encodeURIComponent(mpn)}`)
+    if (!res.ok) throw new Error(`Failed to fetch confidence for ${mpn}`)
+    return res.json()
+  },
+
+  async updateField(mpn: string, field: string, value: string): Promise<{ success: boolean; message: string }> {
+    const res = await fetch(`${BASE_URL}/api/pipeline/update/${encodeURIComponent(mpn)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ field, value })
+    })
+    if (!res.ok) throw new Error(`Failed to update field for ${mpn}`)
+    return res.json()
+  }
 }
+
 

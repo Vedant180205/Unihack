@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import React, { createContext, useContext, useState, useEffect, useRef, useMemo, Suspense } from 'react'
 import Link from 'next/link'
@@ -69,7 +69,6 @@ const nav = [
   { href: '/workbench', label: 'Data Workbench', icon: Database },
   { href: '/overview', label: 'Pipeline Overview', icon: LayoutDashboard },
   { href: '/audit', label: 'HITL Audit Queue', icon: ClipboardCheck },
-  { href: '/benchmark', label: 'Benchmark', icon: Gauge },
 ]
 
 function AppShellInner({ children, title }: { children: React.ReactNode; title: string }) {
@@ -213,29 +212,14 @@ function AppShellInner({ children, title }: { children: React.ReactNode; title: 
                         : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground'
                     }`}
                   >
-                    <span className="flex items-center gap-3">
-                      <Icon className="size-4" />
-                      {label}
-                    </span>
+                    <span className="flex items-center gap-3 whitespace-nowrap"><Icon className="size-4 shrink-0" /><span className="truncate">{label}</span></span>
                     {label === 'HITL Audit Queue' && (
-                      <span className="rounded bg-amber-400/15 px-1.5 py-0.5 font-mono text-[10px] text-amber-300">
-                        {pending} pending
-                      </span>
+                      <span className="ml-2 flex items-center justify-center rounded-full bg-amber-400/15 min-w-[24px] h-[20px] px-1.5 font-mono text-[10px] text-amber-300">
+                        {pending}</span>
                     )}
                   </Link>
                 ))}
               </nav>
-              <p className="mb-3 mt-9 px-3 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                System
-              </p>
-              <button className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm text-muted-foreground hover:bg-accent/60 hover:text-foreground">
-                <Settings2 className="size-4" />
-                Configuration
-              </button>
-              <button className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm text-muted-foreground hover:bg-accent/60 hover:text-foreground">
-                <Boxes className="size-4" />
-                Data sources
-              </button>
             </div>
             <div className="border-t border-border p-4">
               <div className="flex items-center gap-3 rounded-lg bg-accent/50 p-3">
@@ -278,13 +262,8 @@ function AppShellInner({ children, title }: { children: React.ReactNode; title: 
                 </div>
               </div>
 
-              {/* Right Header: Search & Interactive Batch Selector */}
+              {/* Right Header: Notifications */}
               <div className="flex items-center gap-3">
-                <button className="hidden items-center gap-2 rounded-md border border-border px-3 py-2 text-xs text-muted-foreground hover:bg-accent md:flex">
-                  <Search className="size-3.5" />
-                  Search <kbd className="rounded border border-border px-1 font-mono text-[10px]">âŒ˜ K</kbd>
-                </button>
-
                 <button
                   className="relative rounded-md p-2 text-muted-foreground hover:bg-accent"
                   aria-label="Notifications"
@@ -292,88 +271,6 @@ function AppShellInner({ children, title }: { children: React.ReactNode; title: 
                   <Bell className="size-4" />
                   <span className="absolute right-1 top-1 size-1.5 rounded-full bg-cyan-400" />
                 </button>
-
-                {/* Batch Dropdown */}
-                <div className="relative" ref={dropdownRef}>
-                  <button
-                    onClick={() => setBatchDropdownOpen(!batchDropdownOpen)}
-                    className="flex items-center gap-2 rounded-md border border-border/80 bg-card px-3 py-1.5 text-xs font-medium text-foreground hover:bg-accent hover:border-cyan-400/40 transition-all shadow-sm"
-                    aria-expanded={batchDropdownOpen}
-                  >
-                    <span
-                      className={`size-2 rounded-full ${
-                        currentBatchObj.status === 'Live'
-                          ? 'bg-cyan-400 animate-pulse'
-                          : currentBatchObj.status === 'Review'
-                          ? 'bg-amber-400'
-                          : 'bg-emerald-400'
-                      }`}
-                    />
-                    <span className="font-mono font-semibold">{activeBatch}</span>
-                    <ChevronDown
-                      className={`size-3 text-muted-foreground transition-transform duration-200 ${
-                        batchDropdownOpen ? 'rotate-180 text-cyan-300' : ''
-                      }`}
-                    />
-                  </button>
-
-                  {/* Dropdown Menu */}
-                  {batchDropdownOpen && (
-                    <div className="absolute right-0 mt-2 w-72 rounded-xl border border-border/80 bg-card/95 p-2 shadow-2xl backdrop-blur-md z-50 animate-in fade-in zoom-in-95 duration-150">
-                      <div className="px-3 py-2 border-b border-border/60 mb-1">
-                        <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                          Switch Active Batch
-                        </p>
-                        <p className="text-xs font-medium text-foreground mt-0.5">
-                          Select catalog ingestion run
-                        </p>
-                      </div>
-
-                      <div className="space-y-1">
-                        {batches.map((batch) => {
-                          const isSelected = batch.id === activeBatch
-                          return (
-                            <button
-                              key={batch.id}
-                              onClick={() => {
-                                setActiveBatch(batch.id)
-                                setBatchDropdownOpen(false)
-                                toast.info(`Switched active view to ${batch.id}`)
-                              }}
-                              className={`w-full flex items-center justify-between rounded-lg px-3 py-2.5 text-left text-xs transition-colors ${
-                                isSelected
-                                  ? 'bg-cyan-400/15 text-cyan-300 border border-cyan-400/30'
-                                  : 'hover:bg-accent/60 text-foreground'
-                              }`}
-                            >
-                              <div className="space-y-0.5">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-mono font-semibold">{batch.name}</span>
-                                  <span
-                                    className={`rounded-full px-1.5 py-0.2 text-[9px] font-mono uppercase ${
-                                      batch.status === 'Live'
-                                        ? 'bg-cyan-400/20 text-cyan-300'
-                                        : batch.status === 'Review'
-                                        ? 'bg-amber-400/20 text-amber-300'
-                                        : 'bg-emerald-400/20 text-emerald-300'
-                                    }`}
-                                  >
-                                    {batch.status}
-                                  </span>
-                                </div>
-                                <p className="text-[10px] text-muted-foreground truncate max-w-44">
-                                  {batch.source} â€¢ {batch.records} records
-                                </p>
-                              </div>
-
-                              {isSelected && <Check className="size-4 text-cyan-300 shrink-0 ml-2" />}
-                            </button>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
               </div>
             </header>
 
@@ -444,4 +341,7 @@ export { nav }
 export function decrementPending(setPending: React.Dispatch<React.SetStateAction<number>>) {
   setPending((value) => Math.max(0, value - 1))
 }
+
+
+
 

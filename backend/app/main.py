@@ -1,6 +1,17 @@
-﻿"""
+"""
 app/main.py — FastAPI application entry point
 """
+import sys
+import os
+from dotenv import load_dotenv
+
+# 1. Load the backend's .env file
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
+
+import asyncio
+if sys.platform == 'win32':
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -33,3 +44,4 @@ async def root():
 @app.get("/health", tags=["Health"])
 async def health():
     return {"status": "ok"}
+

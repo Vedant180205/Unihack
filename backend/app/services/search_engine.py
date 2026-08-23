@@ -24,41 +24,51 @@ def sanitize_mpn(mpn: str) -> str:
     """Removes special characters to improve search reliability."""
     return re.sub(r'[^A-Za-z0-9]', '', mpn)
 
-def execute_search_query(query: str, max_results: int = 8) -> List[Dict[str, str]]:
+def execute_search_query(query: str, max_results: int = 8, retries: int = 1) -> List[Dict[str, str]]:
     """
-    Executes search with ultra-fast direct DDGS and SearXNG fallback.
+    Executes search with ultra-fast direct DDGS and SearXNG fallback with retries.
     """
-    results = []
-    
-    # 1. Primary: Direct ultra-fast DDGS
-    try:
-        ddgs = DDGS()
-        raw_results = list(ddgs.text(query, max_results=max_results))
-        for r in raw_results:
-            results.append({
-                "url": r.get("href", ""),
-                "title": r.get("title", ""),
-                "content": r.get("body", "")
-            })
+    for attempt in range(retries + 1):
+        results = []
+        
+        # 1. Primary: Direct ultra-fast DDGS
+        try:
+            ddgs = DDGS()
+            raw_results = list(ddgs.text(query, max_results=max_results))
+            for r in raw_results:
+                results.append({
+                    "url": r.get("href", ""),
+                    "title": r.get("title", ""),
+                    "content": r.get("body", "")
+                })
+            if results:
+                return results
+        except Exception:
+            pass
+            
+        # 2. Fallback: Local SearXNG
+        try:
+            # Increased timeout to 10 seconds since local SearXNG can take a moment
+            resp = requests.get(SEARXNG_URL, params={"q": query, "format": "json"}, timeout=10)
+            if resp.status_code == 200:
+                for r in resp.json().get("results", []):
+                    results.append({
+                        "url": r.get("url", ""),
+                        "title": r.get("title", ""),
+                        "content": r.get("content", "")
+                    })
+        except Exception as e:
+            print(f"[WARN] SearXNG request failed: {e}")
+            pass
+            
         if results:
             return results
-    except Exception:
-        pass
-        
-    # 2. Fallback: Local SearXNG
-    try:
-        resp = requests.get(SEARXNG_URL, params={"q": query, "format": "json"}, timeout=3)
-        if resp.status_code == 200:
-            for r in resp.json().get("results", []):
-                results.append({
-                    "url": r.get("url", ""),
-                    "title": r.get("title", ""),
-                    "content": r.get("content", "")
-                })
-    except Exception:
-        pass
-        
-    return results
+            
+        if attempt < retries:
+            print(f"[WARN] Search attempt {attempt + 1} yielded no results. Retrying...")
+            time.sleep(2)
+            
+    return []
 
 def compute_candidate_score(result: Dict[str, Any], target_domain: str, mpn: str, brand: str, part_desc: str) -> float:
     """
@@ -174,7 +184,17 @@ def search_exact_product(mpn: str, manufacturer: str, domain: str, part_desc: st
                 candidates.append((score, result))
                 
     if not candidates:
-        print(f"[WARN] No validated manufacturer URL found for {mpn} on {domain}")
+        print(f"[WARN] First search pass failed. Retrying with relaxed constraints for {mpn}...")
+        fallback_queries = [f'"{mpn}" {manufacturer}']
+        for query in fallback_queries:
+            results = execute_search_query(query, max_results=10)
+            for result in results:
+                score = compute_candidate_score(result, domain, mpn, manufacturer, part_desc)
+                if score >= 0.20: # Lowered threshold for fallback
+                    candidates.append((score, result))
+                    
+    if not candidates:
+        print(f"[WARN] No validated manufacturer URL found for {mpn} on {domain} even after fallback")
         return {"success": False, "url": None, "reason": "No validated manufacturer URL found"}
         
     # Sort candidates by relevance score descending

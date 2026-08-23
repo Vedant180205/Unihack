@@ -1,8 +1,8 @@
-﻿"""
+"""
 pipeline_runner.py
 ------------------
-Core pipeline orchestration logic — identical to pipeline_ved.py.
-Zero logic changes. Only imports updated to point at app.services.*.
+Core pipeline orchestration logic.
+Wired to SearXNG and the Robust Web Crawler engine.
 """
 import csv
 import asyncio
@@ -13,17 +13,9 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 
 from app.services.search_engine import find_manufacturer_domain, search_exact_product
-from app.services.scraper import scrape_product_page
-from app.services.extractor import process_scraped_file, save_clean_csv
-from app.services.preprocessor import preprocess_catalog_row
-from app.services.exporter import (
-    build_252_column_row,
-    append_row_to_output_csv,
-    sync_csv_to_excel,
-)
 from app.core.config import DEFAULT_INPUT_CSV, OUTPUT_CSV, OUTPUT_DIR
 
-# ─── In-memory job registry ───────────────────────────────────────────────────
+# 1 In-memory job registry 1
 # { job_id: { "status": str, "processed": int, "total": int, "error": str } }
 JOBS: Dict[str, Dict] = {}
 
@@ -38,11 +30,15 @@ def get_job(job_id: str) -> Optional[Dict]:
     return JOBS.get(job_id)
 
 
-# ─── Row Processor (exact copy from pipeline_ved.py) ──────────────────────────
+# 1 Row Processor 1
 async def process_row(row: dict, output_dir: Path = OUTPUT_DIR) -> dict:
+    print(f"--- Starting process_row ---")
+    print(f"Row input: {row}")
     part_num = row.get("Mfg_Part_Num") or row.get("PART_NUMBER") or row.get("MANUFACTURER_PART_NUMBER")
     raw_mfg  = row.get("Part_Manuf")   or row.get("MANUFACTURER_NAME") or row.get("BRAND_NAME")
     manufacturer = raw_mfg.split("(")[0].strip() if raw_mfg else None
+    
+    print(f"Extracted basic info - part_num: {part_num}, manufacturer: {manufacturer}")
 
     if not part_num or not manufacturer:
         print(f"[ERROR] Missing Part Number or Manufacturer for row: {row}")
@@ -52,19 +48,13 @@ async def process_row(row: dict, output_dir: Path = OUTPUT_DIR) -> dict:
     print(f"Processing: {manufacturer} | {part_num}")
     print(f"==========================================")
 
-    output_text  = f"--- INPUTS TAKEN FROM CSV ---\n"
-    output_text += f"Manufacturer Name: {manufacturer}\n"
-    output_text += f"Part Number / MPN: {part_num}\n"
-    output_text += f"Raw Manufacturer String: {raw_mfg}\n\n"
-
     # 1. Domain Discovery
     domain = find_manufacturer_domain(manufacturer)
     if not domain:
         print("[FAIL] Could not discover domain.")
         return {}
 
-    output_text += f"--- DOMAIN DISCOVERY ---\n"
-    output_text += f"Discovered Official Domain: {domain}\n\n"
+    print(f"Discovered Official Domain: {domain}")
 
     # 2. Exact Product URL
     search_res = search_exact_product(part_num, manufacturer, domain)
@@ -73,65 +63,47 @@ async def process_row(row: dict, output_dir: Path = OUTPUT_DIR) -> dict:
         return {}
 
     url = search_res.get("url")
-    output_text += f"--- EXACT PRODUCT URL DISCOVERED ---\nURL: {url}\n\n"
+    print(f"Exact Product URL Discovered: {url}")
 
-    # 3. Scrape
-    scrape_res = await scrape_product_page(url)
-    if not scrape_res.get("success"):
-        print("[FAIL] Could not scrape product page.")
-        return {}
-
-    markdown     = scrape_res.get("markdown", "")
-    html_content = scrape_res.get("html", "")
-
-    output_text += f"--- SCRAPED PAGE MARKDOWN ---\n{markdown}"
-
-    safe_mpn         = part_num.replace("/", "_")
-    out_txt          = output_dir / f"scraped_output_{safe_mpn}.txt"
-    out_html         = output_dir / f"scraped_output_{safe_mpn}.html"
-    out_provenance   = output_dir / f"extracted_output_{safe_mpn}.json"
-    out_csv          = output_dir / f"extracted_output_{safe_mpn}_clean.csv"
-
-    out_txt.write_text(output_text, encoding="utf-8")
-    out_html.write_text(html_content, encoding="utf-8")
-
-    print(f"\n--- Scrape Success! ---")
-    print(f"Saved text report to {out_txt}")
-
-    # 4. Groq Provenance Extraction
-    print(f"\n--- Running Groq Provenance Extraction ---")
+    # 3. Direct AI Extraction and Mapping
+    print(f"\n--- Running AI Extraction ---")
     try:
-        result = process_scraped_file(str(out_txt))
+        from app.services.extractor import extract_with_groq, map_to_252_columns
+        
+        def _run_extraction(target_url):
+            return extract_with_groq(target_url, pdf_text="")
 
-        provenance_json = result.get("provenance", {})
-        delivery_dict   = result.get("delivery", {})
+        print(f"[*] Extracting raw data from: {url}")
+        groq_json = await asyncio.to_thread(_run_extraction, url)
+        
+        print(f"[*] Mapping data to 252-column template")
+        mapped_dict, conf_map = map_to_252_columns(groq_json, raw_txt=f"Manufacturer Name: {manufacturer}\nURL: {domain}", mpn=part_num)
+        
+        # Inject URLs
+        mapped_dict["MFR URL"] = domain
+        mapped_dict["Ref URL 1"] = url
+        conf_map["MFR URL"] = 100 if domain else 0
+        conf_map["Ref URL 1"] = 100 if url else 0
+        
+        safe_mpn = part_num.replace("/", "_")
+        raw_json_path = output_dir / f"raw_output_{safe_mpn}.json"
+        mapped_json_path = output_dir / f"extracted_output_{safe_mpn}.json"
+        conf_json_path = output_dir / f"confidence_map_{safe_mpn}.json"
+        
+        # 1. Save the complete raw info (provenance)
+        raw_json_path.write_text(json.dumps(groq_json, indent=2), encoding="utf-8")
+        print(f"[+] Saved raw JSON info to {raw_json_path}")
 
-        out_provenance.write_text(json.dumps(provenance_json, indent=2), encoding="utf-8")
-        print(f"[+] Saved provenance JSON to {out_provenance}")
-
-        save_clean_csv(delivery_dict, str(out_csv))
-
-        print(f"[+] INVOICE_DESC : {delivery_dict.get('INVOICE_DESC')}")
-        print(f"[+] MOBILE_DESC  : {delivery_dict.get('MOBILE_DESC')}")
-        print(f"[+] Confidence   : {delivery_dict.get('confidence_score')}%")
-
-        # Citation summary
-        total_cited = 0
-        for section_name, section_data in provenance_json.items():
-            if not isinstance(section_data, dict):
-                continue
-            section_cited = {k: v for k, v in section_data.items() if isinstance(v, dict) and v.get("source")}
-            if section_cited:
-                print(f"  [{section_name.upper()}]")
-                for field, entry in section_cited.items():
-                    val_str = str(entry.get("value", ""))[:60]
-                    safe_val = val_str.encode("ascii", "replace").decode("ascii")
-                    print(f"    {field}: '{safe_val}' <- {entry.get('source','').upper()}")
-                total_cited += len(section_cited)
-        print(f"  Total verified fields: {total_cited}")
-
-        return delivery_dict
-
+        # 2. Save the mapped 252-column JSON (delivery)
+        mapped_json_path.write_text(json.dumps(mapped_dict, indent=2), encoding="utf-8")
+        print(f"[+] Saved 252-column template JSON to {mapped_json_path}")
+        
+        # 3. Save the confidence map
+        conf_json_path.write_text(json.dumps(conf_map, indent=2), encoding="utf-8")
+        print(f"[+] Saved confidence map JSON to {conf_json_path}")
+        
+        return mapped_dict
+            
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -139,7 +111,9 @@ async def process_row(row: dict, output_dir: Path = OUTPUT_DIR) -> dict:
         return {}
 
 
-# ─── Batch Runner ─────────────────────────────────────────────────────────────
+# 1 Batch Runner 1
+import shutil
+
 async def run_pipeline(
     job_id: str,
     input_csv: str = None,
@@ -150,6 +124,15 @@ async def run_pipeline(
     """Async batch runner. Updates JOBS registry as it processes rows."""
     csv_path = input_csv or str(DEFAULT_INPUT_CSV)
     JOBS[job_id]["status"] = "running"
+    
+    # Clear previous output files
+    try:
+        if output_dir.exists():
+            for item in output_dir.iterdir():
+                if item.is_file():
+                    item.unlink()
+    except Exception as e:
+        print(f"Error clearing output dir: {e}")
 
     try:
         with open(csv_path, newline="", encoding="utf-8-sig") as f:
@@ -158,11 +141,19 @@ async def run_pipeline(
         target_rows = rows[skip: skip + limit]
         JOBS[job_id]["total"] = len(target_rows)
 
-        for row in target_rows:
-            await process_row(row, output_dir=output_dir)
+        print(f"Starting to process {len(target_rows)} rows...")
+        for i, row in enumerate(target_rows):
+            print(f"Processing row {i+1}/{len(target_rows)}")
+            try:
+                await process_row(row, output_dir=output_dir)
+            except Exception as e:
+                import traceback
+                print(f"FATAL ERROR processing row {i+1}: {e}")
+                traceback.print_exc()
             JOBS[job_id]["processed"] += 1
 
         JOBS[job_id]["status"] = "done"
+        print(f"Pipeline job {job_id} done.")
 
     except FileNotFoundError:
         JOBS[job_id]["status"] = "failed"

@@ -5,10 +5,14 @@ from urllib.parse import urlparse
 from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright, TimeoutError
 import pypdf
+from app.services.pdf_harvester import harvest_pdfs_from_page
+
 try:
     from curl_cffi import requests as cffi_requests
-except ImportError:
+    print("[INFO] curl_cffi imported successfully in scraper.py")
+except ImportError as e:
     cffi_requests = None
+    print(f"[ERROR] Failed to import curl_cffi: {e}")
 
 def extract_text_from_pdf_bytes(pdf_bytes: bytes) -> str:
     """Extracts text lines from PDF bytes."""
@@ -23,7 +27,7 @@ def extract_text_from_pdf_bytes(pdf_bytes: bytes) -> str:
     except Exception:
         return ""
 
-async def scrape_product_page(url: str) -> dict:
+async def scrape_product_page(url: str, mpn: str = '') -> dict:
     """
     Ingests official product specification data from:
     1. Direct PDF Spec Sheet / Brochure
@@ -45,38 +49,54 @@ async def scrape_product_page(url: str) -> dict:
                     markdown = f"### TECHNICAL PDF DOCUMENTATION\n**Source URL**: {url}\n\n{pdf_text}"
                     print(f"[SUCCESS] Extracted {len(markdown)} characters from PDF spec sheet.")
                     return {"success": True, "markdown": markdown, "html": "", "url": url}
-        except Exception:
-            pass
+        except NotImplementedError:
+            print("[WARN] Playwright NotImplementedError caught.")
+        except Exception as e:
+            print(f"[WARN] Playwright error: {e}")
             
     # 2. Primary Web Engine: TLS-Impersonated HTTP Engine (bypasses 3M/Akamai)
     html = ""
     if cffi_requests:
         try:
             resp = cffi_requests.get(url, impersonate="chrome120", timeout=8)
+            print(f"[INFO] curl_cffi response: {resp.status_code}, length: {len(resp.text)}")
             if resp.status_code == 200 and len(resp.text) > 300:
                 html = resp.text
         except Exception as e:
             print(f"[WARN] curl_cffi fetch error: {e}")
+    else:
+        print("[WARN] cffi_requests is None (not imported)!")
             
-    # 3. Fallback: Playwright Headless Browser
+    # 3. Fallback: Standard Requests
     if not html or len(html) < 300:
+        print("[INFO] Attempting Standard Requests fallback...")
         try:
-            async with async_playwright() as p:
-                browser = await p.chromium.launch(headless=True, args=["--disable-http2", "--no-sandbox"])
-                context = await browser.new_context(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-                page = await context.new_page()
-                await page.goto(url, wait_until="domcontentloaded", timeout=10000)
-                await page.wait_for_timeout(1500)
-                html = await page.content()
-                await browser.close()
-        except Exception:
-            pass
+            resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}, timeout=10)
+            if resp.status_code == 200 and len(resp.text) > 300:
+                html = resp.text
+            else:
+                print(f"[WARN] Standard Requests failed. Status: {resp.status_code}")
+        except Exception as e:
+            print(f"[WARN] Standard Requests error: {e}")
             
     if not html:
         return {"success": False, "markdown": "", "html": "", "reason": "No content retrieved"}
         
     soup = BeautifulSoup(html, "html.parser")
     markdown_chunks = []
+    
+    # NEW: Run advanced PDF harvester
+    pdf_results = await harvest_pdfs_from_page(html, url, mpn)
+    if pdf_results.get("combined_text"):
+        markdown_chunks.append("### SUPPLEMENTAL PDF SPECIFICATIONS")
+        markdown_chunks.append(pdf_results["combined_text"])
+        markdown_chunks.append("\n")
+    if pdf_results.get("tables"):
+        markdown_chunks.append("### EXTRACTED PDF TABLES")
+        for table in pdf_results["tables"]:
+            markdown_chunks.append(table)
+            markdown_chunks.append("\n")
+
     
     # Meta Tags
     title = soup.title.string if soup.title else ""
@@ -110,5 +130,7 @@ async def scrape_product_page(url: str) -> dict:
         return {"success": True, "markdown": final_text, "html": html, "url": url}
     else:
         return {"success": False, "markdown": "", "html": html, "reason": "Extracted text was too short"}
+
+
 
 

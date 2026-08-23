@@ -1,4 +1,4 @@
-﻿import os
+import os
 import re
 import json
 import csv
@@ -280,14 +280,24 @@ def map_to_252_columns(groq_json: Dict, raw_txt: str, mpn: str) -> Dict[str, Any
     wgt_v, wgt_u   = _dim(dim, "weight")
     vol_v, vol_u   = _dim(dim, "volume")
 
-    row = {
+    # 1. Load the exact headers from expected output CSV
+    template_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "template.csv")
+    row = {}
+    if os.path.exists(template_path):
+        with open(template_path, "r", encoding="utf-8") as f:
+            reader = csv.reader(f)
+            headers = next(reader)
+            # 2. Create an empty dictionary with exact keys
+            row = {h: "" for h in headers}
+    else:
+        print("[WARN] template.csv not found!")
+
+    updates = {
         # === Provenance (Col 1-6) ===
         "MFR URL": mfr_url,
-        "Ref URL 1": "", "Ref URL 2": "", "Ref URL 3": "", "Ref URL 4": "", "Ref URL 5": "",
 
         # === Identifiers (Col 7-22) ===
         "PART_NUMBER": mpn,
-        "Dept": "", "Class": "", "Fine": "",
         "SKU - MY_PART_NUMBER": mpn,
         "Mfg_Part_Num": mpn,
         "Part_Desc": f"{brand} {mpn} {prod_type}".strip(),
@@ -299,7 +309,6 @@ def map_to_252_columns(groq_json: Dict, raw_txt: str, mpn: str) -> Dict[str, Any
         "BRAND_NAME": brand,
         "TRADE_NAME": brand,
         "MANUFACTURER_PART_NUMBER": mpn,
-        "ALTERNATE_PART_NUMBER": "",
 
         # === Classpath & Descriptions (Col 23-29) ===
         "Classpath": f"Hardware & Tools > {prod_type}s" if prod_type else "",
@@ -311,13 +320,16 @@ def map_to_252_columns(groq_json: Dict, raw_txt: str, mpn: str) -> Dict[str, Any
         "MARKETING_DESCRIPTION": _v(desc, "long_desc")[:500] if _v(desc, "long_desc") else "",
 
         # === Fixed spec columns (Col 50-55) ===
-        "With": "",
         "Standard/Approvals": _v(desc, "standards"),
-        "Prop 65": "",
         "Application": _v(desc, "application"),
         "Includes": _v(desc, "includes"),
         "Product Name": _v(desc, "product_name"),
     }
+    
+    if row:
+        row.update(updates)
+    else:
+        row = updates
 
     # === Item Features (Col 30-49) — 20 slots ===
     for i in range(1, 21):
@@ -332,11 +344,14 @@ def map_to_252_columns(groq_json: Dict, raw_txt: str, mpn: str) -> Dict[str, Any
         val = attr_entry.get("value", "")
         if src and val:
             v, u = split_value_uom(str(val))
-            attr_items.append((attr_label, v, u))
+            attr_items.append((attr_label, v, u, src))
+        elif val:
+            v, u = split_value_uom(str(val))
+            attr_items.append((attr_label, v, u, ""))
 
     for i in range(1, 51):
         if i - 1 < len(attr_items):
-            label, val, uom = attr_items[i - 1]
+            label, val, uom, _ = attr_items[i - 1]
             row[f"ATTRIBUTE_LABEL {i}"]  = label
             row[f"ATTRIBUTE_VALUE {i}"] = val
             row[f"ATTRIBUTE_UOM {i}"]   = uom
@@ -404,7 +419,7 @@ def map_to_252_columns(groq_json: Dict, raw_txt: str, mpn: str) -> Dict[str, Any
     row["Discontinued"]        = ""
     row["Actual Image (Yes/No)"] = "Yes" if _v(imgs, "Product Image") else "No"
 
-    # === Confidence Score ===
+    # === Overall Confidence Score ===
     cited_attrs = sum(1 for v in attrs.values() if isinstance(v, dict) and v.get("source"))
     total_attrs = len(attrs) if attrs else 1
     has_dims = sum(1 for k in ["length","width","height","weight"] if _dim(dim, k)[0])
@@ -413,7 +428,73 @@ def map_to_252_columns(groq_json: Dict, raw_txt: str, mpn: str) -> Dict[str, Any
     cited_signals = cited_attrs + has_dims + has_docs
     row["confidence_score"] = round((cited_signals / total_signals) * 100, 2)
 
-    return row
+    # === Build Per-Field Confidence Map ===
+    confidence_map = {}
+    
+    def calculate_grounded_score(value: str, raw_txt: str, cited_source: str) -> int:
+        if not value:
+            return 0
+        if not cited_source:
+            base_score = 40
+        else:
+            base_score = 100
+
+        val_lower = str(value).lower()
+        txt_lower = raw_txt.lower()
+
+        if val_lower in txt_lower:
+            return base_score
+            
+        numbers = re.findall(r'\d+\.?\d*', val_lower)
+        if numbers:
+            found_nums = sum(1 for n in numbers if n in txt_lower)
+            num_ratio = found_nums / len(numbers)
+            return int(base_score * (num_ratio * 0.8))
+
+        words = set(re.findall(r'\w+', val_lower))
+        if not words:
+            return base_score
+        
+        found_words = sum(1 for w in words if w in txt_lower)
+        word_ratio = found_words / len(words)
+        return int(base_score * (word_ratio * 0.9))
+
+    def _score(section_dict: Dict, key: str) -> int:
+        entry = section_dict.get(key, {})
+        if not isinstance(entry, dict) or not entry.get("value"):
+            return 0
+        return calculate_grounded_score(str(entry.get("value", "")), raw_txt, entry.get("source", ""))
+        
+    for k, v in row.items():
+        if not v:
+            confidence_map[k] = 0
+        else:
+            confidence_map[k] = 100 # default high for strings/names
+            
+    # Overrides based on source checking
+    confidence_map["UPC"] = _score(ids, "UPC")
+    confidence_map["EAN"] = _score(ids, "EAN")
+    confidence_map["LENGTH"] = _score(dim, "length")
+    confidence_map["WIDTH"] = _score(dim, "width")
+    confidence_map["HEIGHT"] = _score(dim, "height")
+    confidence_map["WEIGHT"] = _score(dim, "weight")
+    confidence_map["VOLUME"] = _score(dim, "volume")
+    confidence_map["Product Image"] = _score(imgs, "Product Image")
+    confidence_map["Specification Sheet"] = _score(docs, "Specification Sheet")
+    confidence_map["Catalog"] = _score(docs, "Catalog")
+    
+    # Check attributes
+    for i in range(1, 51):
+        if i - 1 < len(attr_items):
+            _, val, uom, src = attr_items[i - 1]
+            s = calculate_grounded_score(f"{val} {uom}".strip(), raw_txt, src)
+            confidence_map[f"ATTRIBUTE_LABEL {i}"] = s
+            confidence_map[f"ATTRIBUTE_VALUE {i}"] = s
+            confidence_map[f"ATTRIBUTE_UOM {i}"] = s
+
+    # Return tuple of data and confidence
+    return row, confidence_map
+
 
 # ---------------------------------------------------------
 # Save clean CSV
@@ -457,10 +538,11 @@ def process_scraped_file(filepath: str) -> Dict[str, Any]:
     groq_json = extract_with_groq(product_url, pdf_text)
     print(f"[+] Raw Groq Output:\n{json.dumps(groq_json, indent=2)}")
 
-    delivery_dict = map_to_252_columns(groq_json, content, mpn)
+    delivery_dict, confidence_map = map_to_252_columns(groq_json, content, mpn)
     return {
         "provenance": groq_json,
-        "delivery": delivery_dict
+        "delivery": delivery_dict,
+        "confidence_map": confidence_map
     }
 
 
