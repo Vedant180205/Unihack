@@ -77,8 +77,8 @@ async def process_row(row: dict, output_dir: Path = OUTPUT_DIR) -> dict:
     # 1. Domain Discovery
     domain = find_manufacturer_domain(manufacturer)
     if not domain:
-        print("[FAIL] Could not discover domain.")
-        return save_fallback_record("Could not discover manufacturer domain")
+        print("[WARN] Could not discover domain. Proceeding without domain filter.")
+        domain = ""
 
     print(f"Discovered Official Domain: {domain}")
 

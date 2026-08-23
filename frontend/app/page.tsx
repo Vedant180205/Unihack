@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import React, { useState, useRef } from 'react'
 import Link from 'next/link'
@@ -40,6 +40,7 @@ export default function HomePage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [dragActive, setDragActive] = useState(false)
   const [selectedFile, setSelectedFile] = useState<UploadedFileState | null>(null)
+  const [actualFile, setActualFile] = useState<File | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [uploadStage, setUploadStage] = useState('')
@@ -71,6 +72,7 @@ export default function HomePage() {
   }
 
   const processSelectedFile = (file: File) => {
+    setActualFile(file)
     const sizeInKb = (file.size / 1024).toFixed(1)
     const sizeStr = file.size > 1024 * 1024 ? `${(file.size / (1024 * 1024)).toFixed(2)} MB` : `${sizeInKb} KB`
 
@@ -85,6 +87,7 @@ export default function HomePage() {
   }
 
   const loadSampleDataset = () => {
+    setActualFile(null)
     setSelectedFile({
       name: 'Unihack_ Sample Dataset - Input.csv',
       size: '248.5 KB',
@@ -95,7 +98,7 @@ export default function HomePage() {
     toast.info('Loaded Unihack 1,000-Item Benchmark Sample Dataset')
   }
 
-  const handleUploadAndLaunch = () => {
+  const handleUploadAndLaunch = async () => {
     if (!selectedFile) {
       toast.error('Please select or drop a dataset file first')
       return
@@ -105,25 +108,36 @@ export default function HomePage() {
     setUploadProgress(15)
     setUploadStage('Ingesting catalog rows...')
 
-    setTimeout(() => {
-      setUploadProgress(45)
+    try {
+      if (selectedFile.isSample) {
+        localStorage.removeItem('uniclean_input_path')
+      } else if (actualFile) {
+        setUploadProgress(40)
+        setUploadStage('Uploading catalog to server...')
+        const res = await api.upload(actualFile)
+        localStorage.setItem('uniclean_input_path', res.saved_path)
+      }
+
+      setUploadProgress(70)
       setUploadStage('Validating 252-column schema targets...')
-    }, 400)
 
-    setTimeout(() => {
-      setUploadProgress(80)
+      setUploadProgress(90)
       setUploadStage('Spawning autonomous web & PDF agents...')
-    }, 850)
 
-    setTimeout(() => {
-      setUploadProgress(100)
-      setUploadStage('Dataset loaded! Switching to Batch 1...')
-      setActiveBatch('Batch 1')
-      toast.success('Dataset successfully ingested as Batch 1! Opening Data Workbench...')
       setTimeout(() => {
-        router.push('/workbench?batch=Batch+1')
-      }, 350)
-    }, 1300)
+        setUploadProgress(100)
+        setUploadStage('Dataset loaded! Switching to Batch 1...')
+        setActiveBatch('Batch 1')
+        toast.success('Dataset successfully ingested as Batch 1! Opening Data Workbench...')
+        setTimeout(() => {
+          router.push('/workbench?batch=Batch+1')
+        }, 350)
+      }, 500)
+
+    } catch (err: any) {
+      setIsUploading(false)
+      toast.error(`Upload failed: ${err.message}`)
+    }
   }
 
   return (
