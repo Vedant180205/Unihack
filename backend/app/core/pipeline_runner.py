@@ -44,6 +44,32 @@ async def process_row(row: dict, output_dir: Path = OUTPUT_DIR) -> dict:
         print(f"[ERROR] Missing Part Number or Manufacturer for row: {row}")
         return {}
 
+    def save_fallback_record(error_msg: str) -> dict:
+        from app.services.extractor import map_to_252_columns
+        dummy_groq = {
+            "raw_attributes": {},
+            "identifiers": {},
+            "dimensions": {},
+            "documents": {},
+            "images": {},
+            "descriptions": {
+                "product_name": {"value": f"Failed: {error_msg}", "source": ""},
+                "brand": {"value": manufacturer, "source": ""}
+            },
+            "pricing": {}
+        }
+        mapped, conf = map_to_252_columns(dummy_groq, raw_txt=f"Manufacturer Name: {manufacturer}\nURL: ", mpn=part_num)
+        for k in conf:
+            conf[k] = 0
+            
+        safe_mpn = part_num.replace("/", "_")
+        mapped_json_path = output_dir / f"extracted_output_{safe_mpn}.json"
+        conf_json_path = output_dir / f"confidence_map_{safe_mpn}.json"
+        
+        mapped_json_path.write_text(json.dumps(mapped, indent=2), encoding="utf-8")
+        conf_json_path.write_text(json.dumps(conf, indent=2), encoding="utf-8")
+        return mapped
+
     print(f"\n==========================================")
     print(f"Processing: {manufacturer} | {part_num}")
     print(f"==========================================")
@@ -52,7 +78,7 @@ async def process_row(row: dict, output_dir: Path = OUTPUT_DIR) -> dict:
     domain = find_manufacturer_domain(manufacturer)
     if not domain:
         print("[FAIL] Could not discover domain.")
-        return {}
+        return save_fallback_record("Could not discover manufacturer domain")
 
     print(f"Discovered Official Domain: {domain}")
 
@@ -60,7 +86,7 @@ async def process_row(row: dict, output_dir: Path = OUTPUT_DIR) -> dict:
     search_res = search_exact_product(part_num, manufacturer, domain)
     if not search_res.get("success"):
         print("[FAIL] Could not find exact product page.")
-        return {}
+        return save_fallback_record("Could not find exact product page")
 
     url = search_res.get("url")
     print(f"Exact Product URL Discovered: {url}")
@@ -108,7 +134,7 @@ async def process_row(row: dict, output_dir: Path = OUTPUT_DIR) -> dict:
         import traceback
         traceback.print_exc()
         print(f"[ERROR] Extraction failed: {e}")
-        return {}
+        return save_fallback_record(f"AI extraction failed: {str(e)}")
 
 
 # 1 Batch Runner 1
