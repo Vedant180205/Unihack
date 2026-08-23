@@ -2,13 +2,14 @@ import requests
 from urllib.parse import urlparse
 import time
 import re
+import os
 from typing import Dict, Any, List, Optional
 try:
     from ddgs import DDGS
 except ImportError:
     from duckduckgo_search import DDGS
 
-SEARXNG_URL = "http://localhost:8080/search"
+SEARXNG_URL = os.environ.get("SEARXNG_URL", "http://localhost:8080/search")
 
 BANNED_DOMAINS = [
     "amazon.", "homedepot.", "lowes.", "ebay.", "walmart.", 
