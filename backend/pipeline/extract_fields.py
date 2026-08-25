@@ -15,23 +15,30 @@ Part number: {part_num}
 Part description (from internal catalog, may be abbreviated): {part_desc}
 Manufacturer/brand: {manufacturer}
 
-Below is crawled content from web sources about this part.
+Below is crawled content from the official manufacturer web sources about this part.
+You MUST ONLY use information found in the text below. Do NOT guess or invent any specs or features.
+If a value is not present in the text, return an empty string "".
 
 {sources}
 
-Return ONLY a JSON object with these keys (use empty string "" for any
-field you cannot support with the text above - do not guess or invent
-values, do not use outside knowledge):
+Return ONLY a JSON object with these keys:
 
 {fields}
 
-Also return an "attributes" array of up to 10 objects, each shaped like
+Also return an "attributes" array of up to 50 objects, each shaped like
 {{"label": "...", "value": "...", "uom": "..."}}, for spec-sheet-style
-attributes (dimensions, material, voltage, grit, pack size, etc). Only
-include attributes explicitly stated in the sources.
+attributes (dimensions, material, voltage, weight, etc). Extract ALL possible attributes found on the page.
 
-Ensure "INVOICE_DESC" is max 40 chars uppercase (e.g., "{part_num} {manufacturer}").
-Ensure "MOBILE_DESC" is 60 to 80 chars descriptive summary.
+Apply the following NORMALIZATION rules to the values/uoms you extract (do not alter the factual meaning):
+1. Convert floating-point measurements to trade fractions where common (e.g., "0.5" -> "1/2", "50.25" -> "50-1/4").
+2. Normalize UOMs to standard engineering abbreviations (e.g., "inches" or "IN." -> "in", "volts" -> "V", "pounds" -> "lb").
+
+Apply the following constraints to the description fields:
+- "INVOICE_DESC": Max 40 chars, ALL UPPERCASE.
+- "MOBILE_DESC": Strictly 60 to 80 chars, descriptive summary.
+- "SHORT_DESC": Must follow formula: [Brand] + [Series] + [MPN] + [Item Type] + [Key Attributes].
+- "LONG_DESC1": Comprehensive technical layout of specs.
+- "RETAIL_DESC": Consumer-facing descriptive summary.
 
 Respond with raw JSON only, no markdown fences, no commentary.
 """
@@ -77,18 +84,18 @@ def extract_fields(part_num: str, part_desc: str, manufacturer: str, crawled_pag
         fields=json.dumps(LLM_TARGET_FIELDS, indent=2),
     )
 
-    # 1. Try local Ollama first
-    try:
-        return extract_with_ollama(prompt)
-    except Exception as e:
-        print(f"  [INFO] Ollama unavailable ({e}). Attempting Cloud LLM fallback...")
-
-    # 2. Try Groq fallback
+    # 1. Try Groq first
     try:
         if os.getenv("GROQ_API_KEY"):
             return extract_with_groq(prompt)
     except Exception as e:
-        print(f"  [WARN] Groq extraction fallback failed: {e}")
+        print(f"  [WARN] Groq extraction failed: {e}. Attempting Ollama fallback...")
+
+    # 2. Try local Ollama fallback
+    try:
+        return extract_with_ollama(prompt)
+    except Exception as e:
+        print(f"  [INFO] Ollama unavailable ({e}).")
 
     # 3. Deterministic basic fallback if no LLM responded
     inv_desc = f"{part_num} {manufacturer}".strip()[:40].upper()

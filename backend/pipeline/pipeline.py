@@ -1,5 +1,5 @@
 import asyncio, csv, json, os
-from search import search
+from search import search, find_manufacturer_domain
 from build_queries import build_queries
 from rank_sources import rank_and_split
 from crawl_sources import crawl_sources
@@ -25,12 +25,14 @@ async def process_row(input_row: dict) -> dict:
     manufacturer = input_row["Part_Manuf"]
     desc = input_row["Part_Desc"]
 
-    queries = build_queries(part_num, desc, manufacturer)
+    official_domain = find_manufacturer_domain(manufacturer)
+
+    queries = build_queries(part_num, desc, manufacturer, domain=official_domain)
     all_results = []
     for q in queries:
         all_results.extend(search(q, limit=5))
 
-    mfr_url, ref_urls = rank_and_split(all_results, desc, manufacturer, part_num)
+    mfr_url, ref_urls = rank_and_split(all_results, desc, manufacturer, part_num, official_domain=official_domain)
     urls_to_crawl = ([mfr_url] if mfr_url else []) + ref_urls
     crawled = await crawl_sources(urls_to_crawl) if urls_to_crawl else []
 

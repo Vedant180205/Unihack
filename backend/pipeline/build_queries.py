@@ -34,12 +34,24 @@ def resolve_brand(part_desc: str, part_manuf: str, mfg_part_num: str) -> str:
         return fallback or mfr
     return mfr
 
-def build_queries(mfg_part_num: str, part_desc: str, part_manuf: str) -> list[str]:
-    brand = resolve_brand(part_desc, part_manuf, mfg_part_num)
+def build_queries(mfg_part_num: str, part_desc: str, part_manuf: str, domain: str = "") -> list[str]:
+    # Since the exact manufacturer is provided, we use it directly
+    brand = clean_manufacturer(part_manuf) or part_manuf
+    
+    # Grab a few key terms from the description for disambiguation
+    key_terms = " ".join(part_desc.split()[:4])
+    
+    if domain:
+        return [
+            f'site:{domain} "{mfg_part_num}"',
+            f'site:{domain} "{mfg_part_num}" {key_terms}',
+            f'site:{domain} "{mfg_part_num}" specification'
+        ]
+        
     return [
-        f'{mfg_part_num} {brand}',
-        f'{mfg_part_num} specification datasheet',
-        f'{part_desc} {brand} product page',
+        f'"{mfg_part_num}" {brand}',
+        f'"{mfg_part_num}" {brand} {key_terms}',
+        f'"{mfg_part_num}" {brand} specification'
     ]
 
 if __name__ == "__main__":
